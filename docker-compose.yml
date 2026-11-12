@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  fiberos:
+    build: .
+    container_name: fiberos-app
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./prisma/fiberos.db:/app/prisma/fiberos.db
+      - ./public/uploads:/app/public/uploads
+    environment:
+      - NODE_ENV=production

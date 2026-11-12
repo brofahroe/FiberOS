@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./fiberos.db"
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  code        String    @unique
+  description String?
+  clusters    Cluster[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Cluster {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  code         String?
+  homePasses   Int           @default(0)
+  workItems    WorkItem[]
+  dailyReports DailyReport[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([projectId, name])
+}
+
+model WorkItem {
+  id           String              @id @default(cuid())
+  clusterId    String
+  cluster      Cluster             @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  category     String              // POLE, CABLE, FAT, FDT, ACCESSORY, OTHER
+  itemName     String
+  unit         String              @default("pcs")
+  boq          Float               @default(0)
+  sortOrder    Int                 @default(0)
+  progressList DailyProgressItem[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([clusterId, itemName])
+}
+
+model DailyReport {
+  id           String              @id @default(cuid())
+  clusterId    String
+  cluster      Cluster             @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  reportDate   String              // Format: YYYY-MM-DD or DD-MMM-YY
+  reporterName String?
+  teamName     String?
+  weather      String?             // Cerah, Mendung, Hujan
+  notes        String?
+  photos       String?             // JSON array of photo URLs/paths
+  items        DailyProgressItem[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([clusterId, reportDate])
+}
+
+model DailyProgressItem {
+  id            String      @id @default(cuid())
+  dailyReportId String
+  dailyReport   DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+  workItemId    String
+  workItem      WorkItem    @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  quantity      Float       @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([dailyReportId, workItemId])
+}
+
