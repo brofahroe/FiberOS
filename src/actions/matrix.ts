@@ -6,24 +6,25 @@ import * as xlsx from 'xlsx';
 const excel = (xlsx as any).default || xlsx;
 
 export async function getMatrixData(filterClusterId?: string) {
-  const whereClause = filterClusterId && filterClusterId !== 'ALL' ? { id: filterClusterId } : {};
+  try {
+    const whereClause = filterClusterId && filterClusterId !== 'ALL' ? { id: filterClusterId } : {};
 
-  const clusters = await prisma.cluster.findMany({
-    where: whereClause,
-    include: {
-      workItems: {
-        include: {
-          progressList: {
-            include: {
-              dailyReport: true,
+    const clusters = await prisma.cluster.findMany({
+      where: whereClause,
+      include: {
+        workItems: {
+          include: {
+            progressList: {
+              include: {
+                dailyReport: true,
+              },
             },
           },
+          orderBy: { sortOrder: 'asc' },
         },
-        orderBy: { sortOrder: 'asc' },
       },
-    },
-    orderBy: { name: 'asc' },
-  });
+      orderBy: { name: 'asc' },
+    });
 
   const reports = await prisma.dailyReport.findMany({
     select: { reportDate: true },
@@ -100,11 +101,19 @@ export async function getMatrixData(filterClusterId?: string) {
     orderBy: { name: 'asc' },
   });
 
-  return {
-    dates,
-    matrixRows,
-    clustersList: allClustersList,
-  };
+    return {
+      dates,
+      matrixRows,
+      clustersList: allClustersList,
+    };
+  } catch (err: any) {
+    console.error('Error fetching matrix data:', err);
+    return {
+      dates: [],
+      matrixRows: [],
+      clustersList: [],
+    };
+  }
 }
 
 export async function exportMatrixToExcel(filterClusterId?: string) {

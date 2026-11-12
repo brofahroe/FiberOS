@@ -8,14 +8,19 @@ export default async function DailyInputPage({
 }: {
   searchParams: { clusterId?: string };
 }) {
-  const clusters = await prisma.cluster.findMany({
-    select: {
-      id: true,
-      name: true,
-      homePasses: true,
-    },
-    orderBy: { name: 'asc' },
-  });
+  let clusters: any[] = [];
+  try {
+    clusters = await prisma.cluster.findMany({
+      select: {
+        id: true,
+        name: true,
+        homePasses: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  } catch (err) {
+    console.error('Error fetching clusters for daily input:', err);
+  }
 
   return (
     <div className="py-2">

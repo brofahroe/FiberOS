@@ -5,17 +5,22 @@ import { Layers, PlusCircle, FileSpreadsheet, Building2 } from 'lucide-react';
 export const revalidate = 0;
 
 export default async function ClustersPage() {
-  const clusters = await prisma.cluster.findMany({
-    include: {
-      workItems: {
-        include: {
-          progressList: true,
+  let clusters: any[] = [];
+  try {
+    clusters = await prisma.cluster.findMany({
+      include: {
+        workItems: {
+          include: {
+            progressList: true,
+          },
+          orderBy: { sortOrder: 'asc' },
         },
-        orderBy: { sortOrder: 'asc' },
       },
-    },
-    orderBy: { name: 'asc' },
-  });
+      orderBy: { name: 'asc' },
+    });
+  } catch (err) {
+    console.error('Error fetching clusters:', err);
+  }
 
   return (
     <div className="space-y-6">
@@ -41,12 +46,12 @@ export default async function ClustersPage() {
       </div>
 
       <div className="space-y-6">
-        {clusters.map((cluster) => {
+        {clusters.map((cluster: any) => {
           let totalBoq = 0;
           let totalInstalled = 0;
 
-          const items = cluster.workItems.map((it) => {
-            const installed = it.progressList.reduce((sum, p) => sum + p.quantity, 0);
+          const items = (cluster.workItems || []).map((it: any) => {
+            const installed = (it.progressList || []).reduce((sum: number, p: any) => sum + p.quantity, 0);
             totalBoq += it.boq;
             totalInstalled += installed;
             return {
@@ -106,7 +111,7 @@ export default async function ClustersPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {items.map((it) => (
+                    {items.map((it: any) => (
                       <tr key={it.id} className="hover:bg-slate-50 transition">
                         <td className="p-3 font-semibold text-slate-900">{it.itemName}</td>
                         <td className="p-3">

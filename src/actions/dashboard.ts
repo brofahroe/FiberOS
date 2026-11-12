@@ -4,29 +4,30 @@ import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 
 export async function getDashboardData() {
-  const project = await prisma.project.findFirst({
-    include: {
-      clusters: {
-        include: {
-          workItems: {
-            include: {
-              progressList: true,
+  try {
+    const project = await prisma.project.findFirst({
+      include: {
+        clusters: {
+          include: {
+            workItems: {
+              include: {
+                progressList: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!project) {
-    return {
-      project: null,
-      categories: [],
-      clusters: [],
-      recentReports: [],
-      dailyTrends: [],
-    };
-  }
+    if (!project) {
+      return {
+        project: null,
+        categories: [],
+        clusters: [],
+        recentReports: [],
+        dailyTrends: [],
+      };
+    }
 
   let totalBoq = 0;
   let totalInstalled = 0;
@@ -166,12 +167,22 @@ export async function getDashboardData() {
 
   const dailyTrends = Array.from(dateMap.values());
 
-  return {
-    project: projectSummary,
-    categories,
-    clusters: clustersWithProgress,
-    recentReports,
-    dailyTrends,
-  };
+    return {
+      project: projectSummary,
+      categories,
+      clusters: clustersWithProgress,
+      recentReports,
+      dailyTrends,
+    };
+  } catch (err: any) {
+    console.error('Error fetching dashboard data:', err);
+    return {
+      project: null,
+      categories: [],
+      clusters: [],
+      recentReports: [],
+      dailyTrends: [],
+    };
+  }
 }
 
