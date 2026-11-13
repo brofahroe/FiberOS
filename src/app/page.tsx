@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getDashboardData } from '@/actions/dashboard';
+import SeedButton from '@/components/SeedButton';
 import { 
   Building2, 
   CheckCircle2, 
@@ -24,16 +25,24 @@ export default async function DashboardPage() {
 
   if (!project) {
     return (
-      <div className="text-center py-20 bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-        <h2 className="text-2xl font-bold text-slate-800">Belum Ada Data Proyek</h2>
-        <p className="text-slate-500 mt-2 mb-6">Database masih kosong. Silakan jalankan migrasi data atau impor BOQ.</p>
-        <Link
-          href="/import-boq"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition"
-        >
-          <Upload className="w-4 h-4" />
-          Impor File BOQ
-        </Link>
+      <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm p-8 max-w-xl mx-auto space-y-4">
+        <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto text-2xl font-bold">
+          ⚡
+        </div>
+        <h2 className="text-2xl font-extrabold text-slate-900">Database Siap Digunakan</h2>
+        <p className="text-slate-500 text-sm max-w-md mx-auto">
+          Klik tombol di bawah untuk memuat otomatis seluruh 15 cluster dan histori data Google Spreadsheet Blora, atau unggah file BOQ baru.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-3">
+          <SeedButton />
+          <Link
+            href="/import-boq"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition"
+          >
+            <Upload className="w-4 h-4" />
+            Impor File BOQ
+          </Link>
+        </div>
       </div>
     );
   }

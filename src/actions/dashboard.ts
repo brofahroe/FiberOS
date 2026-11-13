@@ -2,10 +2,11 @@
 
 import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
+import { runInitialSeed } from '@/actions/seed';
 
 export async function getDashboardData() {
   try {
-    const project = await prisma.project.findFirst({
+    let project = await prisma.project.findFirst({
       include: {
         clusters: {
           include: {
@@ -18,6 +19,24 @@ export async function getDashboardData() {
         },
       },
     });
+
+    if (!project) {
+      // Auto-seed if database is empty
+      await runInitialSeed();
+      project = await prisma.project.findFirst({
+        include: {
+          clusters: {
+            include: {
+              workItems: {
+                include: {
+                  progressList: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    }
 
     if (!project) {
       return {
