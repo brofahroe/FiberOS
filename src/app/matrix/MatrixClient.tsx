@@ -1,9 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { exportMatrixToExcel, updateWorkItemStatus } from '@/actions/matrix';
 import { updateDailyCellProgress } from '@/actions/dailyProgress';
-import { Download, Search, Filter, Loader2, FileSpreadsheet, Edit3, Trash2, X, Check, AlertCircle, MessageSquare } from 'lucide-react';
+import {
+  Download,
+  Search,
+  Filter,
+  Loader2,
+  FileSpreadsheet,
+  Edit3,
+  Trash2,
+  X,
+  Check,
+  AlertCircle,
+  MessageSquare,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  MoveHorizontal,
+} from 'lucide-react';
 import WhatsAppReportModal from '@/components/WhatsAppReportModal';
 
 interface ClusterInfo {
@@ -59,6 +76,62 @@ export default function MatrixClient({
   const [exporting, setExporting] = useState<boolean>(false);
   const [rowStatuses, setRowStatuses] = useState<{ [id: string]: string }>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Summary position preference ('START' = beside Item, 'END' = after dates)
+  const [summaryPosition, setSummaryPosition] = useState<'START' | 'END'>('END');
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollWidth, setScrollWidth] = useState<number>(0);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('fiberos_matrix_summary_pos');
+    if (saved === 'START' || saved === 'END') {
+      setSummaryPosition(saved);
+    }
+  }, []);
+
+  const handleToggleSummaryPos = (pos: 'START' | 'END') => {
+    setSummaryPosition(pos);
+    localStorage.setItem('fiberos_matrix_summary_pos', pos);
+  };
+
+  // Sync scroll width for top scrollbar
+  useEffect(() => {
+    const updateWidth = () => {
+      if (tableContainerRef.current) {
+        setScrollWidth(tableContainerRef.current.scrollWidth);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, [rows, dates, summaryPosition]);
+
+  const handleTableScroll = () => {
+    if (tableContainerRef.current && topScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+    }
+  };
+
+  const handleTopScroll = () => {
+    if (tableContainerRef.current && topScrollRef.current) {
+      tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const scrollTable = (direction: 'start' | 'left' | 'right' | 'end') => {
+    if (!tableContainerRef.current) return;
+    const container = tableContainerRef.current;
+    if (direction === 'start') {
+      container.scrollTo({ left: 0, behavior: 'smooth' });
+    } else if (direction === 'end') {
+      container.scrollTo({ left: container.scrollWidth, behavior: 'smooth' });
+    } else if (direction === 'left') {
+      container.scrollBy({ left: -380, behavior: 'smooth' });
+    } else if (direction === 'right') {
+      container.scrollBy({ left: 380, behavior: 'smooth' });
+    }
+  };
 
   // Edit cell modal state
   const [editingCell, setEditingCell] = useState<EditingCellState | null>(null);
@@ -287,13 +360,106 @@ export default function MatrixClient({
         <span>Jika ada salah input atau salah tanggal, cukup <strong>klik angka pada kolom tanggal</strong> di tabel untuk langsung mengedit nilai volume atau menghapusnya.</span>
       </div>
 
-      {/* The Matrix Table */}
+      {/* The Matrix Table Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto max-h-[70vh]">
+        {/* Table Navigation & Controls Toolbar */}
+        <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+          {/* Left: Scroll buttons */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-bold text-slate-700 flex items-center gap-1 mr-1">
+              <MoveHorizontal className="w-4 h-4 text-blue-600" />
+              Navigasi Kolom:
+            </span>
+            <button
+              type="button"
+              onClick={() => scrollTable('start')}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-bold shadow-xs transition flex items-center gap-1 active:scale-95"
+              title="Lompat ke kolom paling awal (Cluster & Item)"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Awal</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTable('left')}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-lg font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95"
+              title="Geser kolom ke kiri"
+            >
+              <ChevronLeft className="w-3.5 h-3.5 text-blue-600" />
+              <span>Geser Kiri</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTable('right')}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-lg font-bold shadow-xs transition flex items-center gap-1.5 active:scale-95"
+              title="Geser kolom ke kanan"
+            >
+              <span>Geser Kanan</span>
+              <ChevronRight className="w-3.5 h-3.5 text-blue-600" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTable('end')}
+              className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-bold shadow-xs transition flex items-center gap-1 active:scale-95"
+              title="Lompat langsung ke kolom paling kanan (Total, BOQ & Status)"
+            >
+              <span className="hidden sm:inline">Ke Akhir</span>
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Right: Layout Toggle for Summary Position */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 font-semibold hidden md:inline">Posisi Ringkasan (Total & BOQ):</span>
+            <div className="inline-flex bg-slate-200/80 p-0.5 rounded-lg text-[11px]">
+              <button
+                type="button"
+                onClick={() => handleToggleSummaryPos('START')}
+                className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 ${
+                  summaryPosition === 'START'
+                    ? 'bg-white text-blue-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tampilkan Total, BOQ, Sisa, Prog%, dan Status di sebelah nama item (tanpa perlu scroll ke kanan)"
+              >
+                <span>📌 Di Depan (Praktis)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleSummaryPos('END')}
+                className={`px-3 py-1 rounded-md font-bold transition flex items-center gap-1 ${
+                  summaryPosition === 'END'
+                    ? 'bg-white text-blue-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Tampilkan Total, BOQ, dan Status di sebelah kanan setelah semua tanggal (standar Excel)"
+              >
+                <span>📋 Di Akhir (Standar)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Synchronized Top Horizontal Scrollbar */}
+        <div
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          className="overflow-x-auto table-scrollbar bg-slate-100/90 border-b border-slate-200 h-3"
+          title="Scroll horizontal atas"
+        >
+          <div style={{ width: `${scrollWidth}px`, height: '1px' }} />
+        </div>
+
+        {/* Main Table Scroll Container */}
+        <div
+          ref={tableContainerRef}
+          onScroll={handleTableScroll}
+          className="overflow-x-auto table-scrollbar max-h-[70vh]"
+        >
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="p-3 border-b border-r border-slate-200 min-w-[140px] sticky left-0 bg-slate-100 z-30">
+                <th className="p-3 border-b border-r border-slate-200 min-w-[140px] sticky left-0 bg-slate-100 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                   Cluster
                 </th>
                 <th className="p-3 border-b border-r border-slate-200 w-16 text-center">
@@ -308,6 +474,29 @@ export default function MatrixClient({
                 <th className="p-3 border-b border-r border-slate-200 w-16 text-center">
                   Satuan
                 </th>
+
+                {/* Summary Headers when placed at START */}
+                {summaryPosition === 'START' && (
+                  <>
+                    <th className="p-3 border-b border-r border-slate-200 text-right min-w-[85px] bg-blue-50/80 text-blue-900 font-bold">
+                      TOTAL
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-right min-w-[85px] bg-slate-200/70 text-slate-900 font-bold">
+                      BOQ
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-right min-w-[85px] text-slate-600 font-bold">
+                      SISA
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-center min-w-[85px] bg-slate-100 font-bold">
+                      PROG %
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-center min-w-[140px] bg-slate-100 font-bold">
+                      STATUS FINAL
+                    </th>
+                  </>
+                )}
+
+                {/* Date Columns */}
                 {dates.map((dateStr) => (
                   <th
                     key={dateStr}
@@ -316,21 +505,27 @@ export default function MatrixClient({
                     {dateStr}
                   </th>
                 ))}
-                <th className="p-3 border-b border-r border-slate-200 text-right min-w-[80px] bg-blue-50/80 text-blue-900 font-bold">
-                  TOTAL
-                </th>
-                <th className="p-3 border-b border-r border-slate-200 text-right min-w-[80px] bg-slate-200/70 text-slate-900 font-bold">
-                  BOQ
-                </th>
-                <th className="p-3 border-b border-r border-slate-200 text-right min-w-[80px] text-slate-600">
-                  SISA
-                </th>
-                <th className="p-3 border-b border-slate-200 text-center min-w-[80px] bg-slate-100 font-bold border-r">
-                  PROG %
-                </th>
-                <th className="p-3 border-b border-slate-200 text-center min-w-[130px] bg-slate-100 font-bold sticky right-0 z-30">
-                  STATUS FINAL
-                </th>
+
+                {/* Summary Headers when placed at END */}
+                {summaryPosition === 'END' && (
+                  <>
+                    <th className="p-3 border-b border-r border-slate-200 text-right min-w-[85px] bg-blue-50/80 text-blue-900 font-bold">
+                      TOTAL
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-right min-w-[85px] bg-slate-200/70 text-slate-900 font-bold">
+                      BOQ
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-right min-w-[85px] text-slate-600 font-bold">
+                      SISA
+                    </th>
+                    <th className="p-3 border-b border-r border-slate-200 text-center min-w-[85px] bg-slate-100 font-bold">
+                      PROG %
+                    </th>
+                    <th className="p-3 border-b border-slate-200 text-center min-w-[140px] bg-slate-100 font-bold">
+                      STATUS FINAL
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -346,9 +541,55 @@ export default function MatrixClient({
                   const isDone = currentStatus === 'DONE';
                   const effectiveRemaining = isDone ? 0 : row.remaining;
                   const effectivePercentage = isDone ? 100 : row.percentage;
+
+                  const summaryCells = (isAtStart: boolean) => (
+                    <>
+                      <td className="p-2.5 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-slate-100 min-w-[85px]">
+                        {row.totalInstalled.toLocaleString()}
+                      </td>
+                      <td className="p-2.5 text-right font-bold text-slate-900 bg-slate-100/40 border-r border-slate-100 min-w-[85px]">
+                        {row.boq.toLocaleString()}
+                      </td>
+                      <td className="p-2.5 text-right text-slate-600 border-r border-slate-100 min-w-[85px]">
+                        {effectiveRemaining.toLocaleString()}
+                      </td>
+                      <td className="p-2.5 text-center border-r border-slate-100 min-w-[85px]">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            effectivePercentage >= 100
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : effectivePercentage > 0
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {effectivePercentage}%
+                        </span>
+                      </td>
+                      <td className={`p-2 text-center min-w-[140px] ${isAtStart ? 'border-r border-slate-100' : ''}`}>
+                        <select
+                          value={currentStatus}
+                          onChange={(e) => handleStatusChange(row.workItemId, e.target.value)}
+                          disabled={updatingId === row.workItemId}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                            currentStatus === 'DONE'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : currentStatus === 'HOLD'
+                              ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                              : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                          }`}
+                        >
+                          <option value="ONGOING">⚡ ONGOING</option>
+                          <option value="DONE">✓ DONE (Final)</option>
+                          <option value="HOLD">⏸️ HOLD</option>
+                        </select>
+                      </td>
+                    </>
+                  );
+
                   return (
-                    <tr key={idx} className="hover:bg-blue-50/30 transition">
-                      <td className="p-2.5 font-bold text-slate-900 border-r border-slate-100 sticky left-0 bg-white">
+                    <tr key={idx} className="hover:bg-blue-50/30 transition group">
+                      <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                         {row.clusterName}
                       </td>
                       <td className="p-2.5 text-center border-r border-slate-100 text-slate-500">
@@ -371,6 +612,11 @@ export default function MatrixClient({
                       <td className="p-2.5 text-center border-r border-slate-100 text-slate-400">
                         {row.unit}
                       </td>
+
+                      {/* Summary Cells when placed at START */}
+                      {summaryPosition === 'START' && summaryCells(true)}
+
+                      {/* Date Cells */}
                       {dates.map((dateStr) => {
                         const val = row.dailyValues[dateStr];
                         return (
@@ -378,7 +624,7 @@ export default function MatrixClient({
                             key={dateStr}
                             onClick={() => handleOpenEditCell(row, dateStr)}
                             title="Klik untuk mengoreksi volume atau menghapus salah input"
-                            className={`p-2 text-center border-r border-slate-100 cursor-pointer transition hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 select-none group ${
+                            className={`p-2 text-center border-r border-slate-100 cursor-pointer transition hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 select-none group min-w-[65px] ${
                               val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
                             }`}
                           >
@@ -388,46 +634,9 @@ export default function MatrixClient({
                           </td>
                         );
                       })}
-                      <td className="p-2.5 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-slate-100">
-                        {row.totalInstalled.toLocaleString()}
-                      </td>
-                      <td className="p-2.5 text-right font-bold text-slate-900 bg-slate-100/40 border-r border-slate-100">
-                        {row.boq.toLocaleString()}
-                      </td>
-                      <td className="p-2.5 text-right text-slate-600 border-r border-slate-100">
-                        {effectiveRemaining.toLocaleString()}
-                      </td>
-                      <td className="p-2.5 text-center border-r border-slate-100">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            effectivePercentage >= 100
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : effectivePercentage > 0
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          {effectivePercentage}%
-                        </span>
-                      </td>
-                      <td className="p-2 text-center sticky right-0 bg-white shadow-sm">
-                        <select
-                          value={currentStatus}
-                          onChange={(e) => handleStatusChange(row.workItemId, e.target.value)}
-                          disabled={updatingId === row.workItemId}
-                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
-                            currentStatus === 'DONE'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
-                              : currentStatus === 'HOLD'
-                              ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
-                              : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
-                          }`}
-                        >
-                          <option value="ONGOING">⚡ ONGOING</option>
-                          <option value="DONE">✓ DONE (Final)</option>
-                          <option value="HOLD">⏸️ HOLD</option>
-                        </select>
-                      </td>
+
+                      {/* Summary Cells when placed at END */}
+                      {summaryPosition === 'END' && summaryCells(false)}
                     </tr>
                   );
                 })

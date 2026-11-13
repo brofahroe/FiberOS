@@ -30,3 +30,20 @@ body {
   background: #94a3b8;
 }
 
+/* Enhanced table scrollbars for wide matrix navigation */
+.table-scrollbar::-webkit-scrollbar {
+  height: 10px;
+}
+.table-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+  border: 2px solid #f1f5f9;
+}
+.table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
