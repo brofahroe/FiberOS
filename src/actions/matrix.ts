@@ -54,7 +54,11 @@ export async function getMatrixData(filterClusterId?: string) {
     clusterId: string;
     clusterName: string;
     homePasses: number;
+    scope: string;
+    workType: string;
     category: string;
+    subCategory?: string | null;
+    weight: number;
     itemName: string;
     unit: string;
     boq: number;
@@ -89,7 +93,11 @@ export async function getMatrixData(filterClusterId?: string) {
         clusterId: cluster.id,
         clusterName: isFirstClusterRow ? cluster.name : '',
         homePasses: isFirstClusterRow ? cluster.homePasses : 0,
+        scope: item.scope || 'CLUSTER',
+        workType: item.workType || 'CW',
         category: item.category,
+        subCategory: item.subCategory,
+        weight: item.weight || 0,
         itemName: item.itemName,
         unit: item.unit,
         boq: item.boq,
@@ -127,13 +135,15 @@ export async function getMatrixData(filterClusterId?: string) {
 export async function exportMatrixToExcel(filterClusterId?: string) {
   const { dates, matrixRows } = await getMatrixData(filterClusterId);
 
-  const headerRow1 = ['Cluster', 'HP', 'Item Pekerjaan', 'Satuan', ...dates, 'TOTAL', 'BOQ', 'SISA', 'PROGRESS %', 'STATUS'];
+  const headerRow1 = ['Cluster', 'HP', 'Scope', 'Tipe', 'Item Pekerjaan', 'Satuan', ...dates, 'TOTAL', 'BOQ', 'SISA', 'PROGRESS %', 'STATUS'];
 
   const rowsData = matrixRows.map((r) => {
     const dailyCells = dates.map((d) => r.dailyValues[d] || '');
     return [
       r.clusterName,
       r.homePasses || '',
+      r.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)',
+      r.workType || 'CW',
       r.itemName,
       r.unit,
       ...dailyCells,
@@ -151,7 +161,9 @@ export async function exportMatrixToExcel(filterClusterId?: string) {
   const colWidths = [
     { wch: 22 },
     { wch: 8 },
-    { wch: 26 },
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 28 },
     { wch: 8 },
     ...dates.map(() => ({ wch: 10 })),
     { wch: 10 },

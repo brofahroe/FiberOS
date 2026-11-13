@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { Layers, PlusCircle, FileSpreadsheet, Building2 } from 'lucide-react';
+import { calculateClusterProgress } from '@/lib/progressCalculator';
 
 export const revalidate = 0;
 
@@ -50,6 +51,23 @@ export default async function ClustersPage() {
           let totalBoq = 0;
           let totalInstalled = 0;
 
+          const calcInput = (cluster.workItems || []).map((it: any) => {
+            const installed = (it.progressList || []).reduce((sum: number, p: any) => sum + p.quantity, 0);
+            return {
+              id: it.id,
+              scope: it.scope,
+              workType: it.workType,
+              category: it.category,
+              subCategory: it.subCategory,
+              itemName: it.itemName,
+              boq: it.boq,
+              installed,
+              status: it.status,
+            };
+          });
+
+          const clusterCalc = calculateClusterProgress(calcInput);
+
           const items = (cluster.workItems || []).map((it: any) => {
             const installed = (it.progressList || []).reduce((sum: number, p: any) => sum + p.quantity, 0);
             const isDone = it.status === 'DONE';
@@ -67,8 +85,6 @@ export default async function ClustersPage() {
             };
           });
 
-          const clusterPct = totalBoq > 0 ? Math.min(100, Math.round((totalInstalled / totalBoq) * 100)) : 0;
-
           return (
             <div key={cluster.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
@@ -79,7 +95,7 @@ export default async function ClustersPage() {
                   <div>
                     <h2 className="text-base font-bold text-slate-900">{cluster.name}</h2>
                     <p className="text-xs text-slate-500">
-                      Home Passes: <strong className="text-slate-700">{cluster.homePasses || '-'}</strong> • Progress: <strong className="text-blue-600">{clusterPct}%</strong>
+                      Home Passes: <strong className="text-slate-700">{cluster.homePasses || '-'}</strong> • Progress: <strong className="text-blue-600">{clusterCalc.totalWeightedPercentage}%</strong> (CLR 70%: {clusterCalc.clr.scopePercentage}% | SF 30%: {clusterCalc.sf.scopePercentage}%)
                     </p>
                   </div>
                 </div>
@@ -107,6 +123,7 @@ export default async function ClustersPage() {
                   <thead className="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
                       <th className="p-3">Item Pekerjaan</th>
+                      <th className="p-3 w-24 text-center">Scope</th>
                       <th className="p-3 w-28">Kategori</th>
                       <th className="p-3 w-20 text-center">Satuan</th>
                       <th className="p-3 w-28 text-right">Target BOQ</th>
@@ -120,6 +137,17 @@ export default async function ClustersPage() {
                     {items.map((it: any) => (
                       <tr key={it.id} className="hover:bg-slate-50 transition">
                         <td className="p-3 font-semibold text-slate-900">{it.itemName}</td>
+                        <td className="p-3 text-center">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              it.scope === 'SUBFEEDER'
+                                ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                : 'bg-blue-100 text-blue-700 border border-blue-200'
+                            }`}
+                          >
+                            {it.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
+                          </span>
+                        </td>
                         <td className="p-3">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
                             {it.category}

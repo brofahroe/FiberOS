@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import { runInitialSeed } from '@/actions/seed';
+import { calculateClusterProgress } from '@/lib/progressCalculator';
 
 export async function getDashboardData() {
   try {
@@ -73,6 +74,23 @@ export async function getDashboardData() {
     let clusterBoq = 0;
     let clusterInstalled = 0;
 
+    const calcInput = cluster.workItems.map((item) => {
+      const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
+      return {
+        id: item.id,
+        scope: item.scope,
+        workType: item.workType,
+        category: item.category,
+        subCategory: item.subCategory,
+        itemName: item.itemName,
+        boq: item.boq,
+        installed,
+        status: item.status,
+      };
+    });
+
+    const clusterCalc = calculateClusterProgress(calcInput);
+
     const itemsSummary = cluster.workItems.map((item) => {
       const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
       const isDone = item.status === 'DONE';
@@ -94,7 +112,11 @@ export async function getDashboardData() {
 
       return {
         id: item.id,
+        scope: item.scope,
+        workType: item.workType,
         category: item.category,
+        subCategory: item.subCategory,
+        weight: item.weight,
         itemName: item.itemName,
         unit: item.unit,
         boq: item.boq,
@@ -108,9 +130,12 @@ export async function getDashboardData() {
     totalBoq += clusterBoq;
     totalInstalled += clusterInstalled;
 
-    const clusterPercent = clusterBoq > 0 ? Math.min(100, Math.round((clusterInstalled / clusterBoq) * 100)) : 0;
     const status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' =
-      clusterPercent >= 100 ? 'COMPLETED' : clusterPercent > 0 ? 'IN_PROGRESS' : 'NOT_STARTED';
+      clusterCalc.totalWeightedPercentage >= 100
+        ? 'COMPLETED'
+        : clusterCalc.totalWeightedPercentage > 0
+        ? 'IN_PROGRESS'
+        : 'NOT_STARTED';
 
     clustersWithProgress.push({
       id: cluster.id,
@@ -119,7 +144,11 @@ export async function getDashboardData() {
       homePasses: cluster.homePasses,
       totalBoq: Math.round(clusterBoq * 10) / 10,
       totalInstalled: Math.round(clusterInstalled * 10) / 10,
-      percentage: clusterPercent,
+      percentage: clusterCalc.totalWeightedPercentage,
+      clrPercentage: clusterCalc.clr.scopePercentage,
+      sfPercentage: clusterCalc.sf.scopePercentage,
+      clrContribution: clusterCalc.clr.totalContribution,
+      sfContribution: clusterCalc.sf.totalContribution,
       status: status,
       workItems: itemsSummary,
     });
@@ -139,7 +168,10 @@ export async function getDashboardData() {
     };
   });
 
-  const overallProgress = totalBoq > 0 ? Math.min(100, Math.round((totalInstalled / totalBoq) * 100)) : 0;
+  const overallProgress =
+    clustersWithProgress.length > 0
+      ? Math.round(clustersWithProgress.reduce((sum, c) => sum + c.percentage, 0) / clustersWithProgress.length)
+      : (totalBoq > 0 ? Math.min(100, Math.round((totalInstalled / totalBoq) * 100)) : 0);
 
   const projectSummary: ProjectSummary = {
     id: project.id,

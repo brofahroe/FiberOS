@@ -90,8 +90,9 @@ async function main() {
 
     const existingItem = await prisma.workItem.findUnique({
       where: {
-        clusterId_itemName: {
+        clusterId_scope_itemName: {
           clusterId: currentCluster.id,
+          scope: 'CLUSTER',
           itemName: itemCell,
         },
       },
@@ -101,11 +102,18 @@ async function main() {
 
     const category = detectCategory(itemCell);
     const unit = detectUnit(itemCell, category);
+    const workType = category === 'FAT' || category === 'FDT' ? 'EL' : 'CW';
+    const subCategory = category === 'ACCESSORY' ? 'ACC' : category;
+    const weight = category === 'POLE' ? 40 : category === 'CABLE' ? 20 : category === 'FAT' ? 25 : category === 'FDT' ? 5 : 10;
 
     const workItem = await prisma.workItem.create({
       data: {
         clusterId: currentCluster.id,
+        scope: 'CLUSTER',
+        workType,
         category,
+        subCategory,
+        weight,
         itemName: itemCell,
         unit,
         boq,

@@ -17,10 +17,17 @@ export interface ParsedBoqItem {
 
 export interface ParsedBoqResult {
   clusterName: string;
+  scope: 'CLUSTER' | 'SUBFEEDER';
   projectCode?: string;
   sheetName: string;
   totalItems: number;
   items: ParsedBoqItem[];
+}
+
+function cleanClusterName(rawName: string): string {
+  let name = rawName.toUpperCase().trim();
+  name = name.replace(/^SF-/, '').replace(/^KELURAHAN\s+/, '').replace(/\s+BLORA$/, '').trim();
+  return name;
 }
 
 function detectCategory(name: string): string {
@@ -29,7 +36,8 @@ function detectCategory(name: string): string {
   if (lower.includes('kabel') || lower.includes('cable') || lower.includes('fo type') || lower.includes('fo core') || lower.includes('cores')) return 'CABLE';
   if (lower.includes('fat') || lower.includes('terminal box')) return 'FAT';
   if (lower.includes('fdt') || lower.includes('distribution terminal')) return 'FDT';
-  if (lower.includes('clamp') || lower.includes('sling') || lower.includes('hanger') || lower.includes('tray') || lower.includes('belt') || lower.includes('grip') || lower.includes('stoplink') || lower.includes('dead')) return 'ACCESSORY';
+  if (lower.includes('joint closure') || lower.includes('closure') || lower.includes('jc')) return 'JC';
+  if (lower.includes('clamp') || lower.includes('sling') || lower.includes('hanger') || lower.includes('tray') || lower.includes('belt') || lower.includes('grip') || lower.includes('stoplink') || lower.includes('dead') || lower.includes('perapihan') || lower.includes('acc')) return 'ACCESSORY';
   return 'OTHER';
 }
 
@@ -42,7 +50,7 @@ function detectUnit(name: string, category: string, rawUnit?: string): string {
   }
   if (category === 'POLE') return 'Btg';
   if (category === 'CABLE') return 'Meter';
-  if (category === 'FAT' || category === 'FDT') return 'Unit';
+  if (category === 'FAT' || category === 'FDT' || category === 'JC') return 'Unit';
   return 'Pcs';
 }
 
@@ -82,10 +90,6 @@ function parseWorkbook(workbook: any, originalFilename?: string): ParsedBoqResul
     if (clusterName) break;
   }
 
-  if (isSubfeeder && clusterName && !clusterName.toLowerCase().startsWith('sf-')) {
-    clusterName = `SF-${clusterName}`;
-  }
-
   if (!clusterName && originalFilename) {
     const match = originalFilename.match(/(?:KELURAHAN\s+)?([A-Za-z0-9_\-\s]+?)(?:_BOQ|\.xlsx)/i);
     if (match && match[1]) {
@@ -93,9 +97,7 @@ function parseWorkbook(workbook: any, originalFilename?: string): ParsedBoqResul
     }
   }
 
-  if (!clusterName) {
-    clusterName = isSubfeeder ? 'SUBFEEDER BARU' : 'CLUSTER BARU';
-  }
+  const cleanedName = cleanClusterName(clusterName || (isSubfeeder ? 'SUBFEEDER BARU' : 'CLUSTER BARU'));
 
   const parsedItems: ParsedBoqItem[] = [];
 
@@ -133,7 +135,8 @@ function parseWorkbook(workbook: any, originalFilename?: string): ParsedBoqResul
   }
 
   return {
-    clusterName,
+    clusterName: cleanedName,
+    scope: isSubfeeder ? 'SUBFEEDER' : 'CLUSTER',
     sheetName: targetSheetName,
     totalItems: parsedItems.length,
     items: parsedItems,
@@ -170,6 +173,7 @@ export async function parseSampleBoqFile(filename: string): Promise<{ success: b
 
 export async function commitBoqImport(data: {
   clusterName: string;
+  scope?: 'CLUSTER' | 'SUBFEEDER';
   homePasses?: number;
   items: ParsedBoqItem[];
 }) {
@@ -187,40 +191,89 @@ export async function commitBoqImport(data: {
       });
     }
 
-    const cluster = await prisma.cluster.upsert({
+    const cleanedName = cleanClusterName(data.clusterName);
+    const scope: 'CLUSTER' | 'SUBFEEDER' = data.scope || (data.clusterName.toUpperCase().includes('SF') ? 'SUBFEEDER' : 'CLUSTER');
+
+    let cluster = await prisma.cluster.findFirst({
       where: {
-        projectId_name: {
-          projectId: project.id,
-          name: data.clusterName.trim(),
-        },
-      },
-      update: {
-        homePasses: data.homePasses && data.homePasses > 0 ? data.homePasses : undefined,
-      },
-      create: {
         projectId: project.id,
-        name: data.clusterName.trim(),
-        homePasses: data.homePasses || 0,
+        OR: [
+          { name: cleanedName },
+          { name: data.clusterName.trim() },
+        ],
       },
     });
 
-    let sortOrder = 0;
+    if (!cluster) {
+      cluster = await prisma.cluster.create({
+        data: {
+          projectId: project.id,
+          name: cleanedName,
+          homePasses: data.homePasses || 0,
+        },
+      });
+    } else if (data.homePasses && data.homePasses > 0) {
+      await prisma.cluster.update({
+        where: { id: cluster.id },
+        data: { homePasses: data.homePasses },
+      });
+    }
+
+    let sortOrder = scope === 'SUBFEEDER' ? 100 : 0;
     for (const it of data.items) {
+      let workType = 'CW';
+      let subCategory = 'POLE';
+      let weight = 40;
+
+      if (it.category === 'POLE') {
+        workType = 'CW';
+        subCategory = 'POLE';
+        weight = scope === 'SUBFEEDER' ? 50 : 40;
+      } else if (it.category === 'CABLE') {
+        workType = 'CW';
+        subCategory = 'CABLE';
+        weight = 20;
+      } else if (it.category === 'FAT') {
+        workType = 'EL';
+        subCategory = 'FAT';
+        weight = 25;
+      } else if (it.category === 'FDT') {
+        workType = 'EL';
+        subCategory = 'FDT';
+        weight = 5;
+      } else if (it.category === 'JC') {
+        workType = 'EL';
+        subCategory = 'JC';
+        weight = 20;
+      } else if (it.category === 'ACCESSORY') {
+        workType = 'CW';
+        subCategory = 'ACC';
+        weight = 10;
+      }
+
       await prisma.workItem.upsert({
         where: {
-          clusterId_itemName: {
+          clusterId_scope_itemName: {
             clusterId: cluster.id,
+            scope,
             itemName: it.itemName,
           },
         },
         update: {
           boq: it.quantity,
           category: it.category,
+          subCategory,
+          workType,
+          weight,
           unit: it.unit,
         },
         create: {
           clusterId: cluster.id,
+          scope,
+          workType,
           category: it.category,
+          subCategory,
+          weight,
           itemName: it.itemName,
           unit: it.unit,
           boq: it.quantity,
@@ -235,7 +288,7 @@ export async function commitBoqImport(data: {
 
     return {
       success: true,
-      message: `Berhasil mengimpor BOQ untuk cluster "${data.clusterName}" dengan ${data.items.length} item pekerjaan!`,
+      message: `Berhasil mengimpor BOQ (${scope === 'SUBFEEDER' ? 'Subfeeder 30%' : 'Cluster 70%'}) untuk cluster "${cluster.name}" dengan ${data.items.length} item pekerjaan!`,
     };
   } catch (err: any) {
     console.error('Error committing BOQ import:', err);

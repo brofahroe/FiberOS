@@ -225,25 +225,67 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                   <span
-                    className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                    className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
                       cluster.percentage >= 100
-                        ? 'bg-emerald-100 text-emerald-700'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         : cluster.percentage > 0
-                        ? 'bg-blue-100 text-blue-700'
+                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
                         : 'bg-slate-100 text-slate-600'
                     }`}
                   >
-                    {cluster.percentage}%
+                    {cluster.percentage}% Total
                   </span>
                 </div>
 
-                <div className="w-full bg-slate-100 rounded-full h-2 my-2.5 overflow-hidden">
+                {/* Overall Progress Bar */}
+                <div className="w-full bg-slate-100 rounded-full h-2 my-2 overflow-hidden">
                   <div
-                    className={`h-2 rounded-full ${
-                      cluster.percentage >= 100 ? 'bg-emerald-500' : 'bg-blue-600'
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      cluster.percentage >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-blue-600 to-indigo-600'
                     }`}
                     style={{ width: `${cluster.percentage}%` }}
                   />
+                </div>
+
+                {/* Scope Breakdown Bars: CLR (70%) vs SF (30%) */}
+                <div className="space-y-1.5 my-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  {/* CLR Bar */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-0.5">
+                      <span className="font-semibold text-slate-700 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block"></span>
+                        Cluster (70%):
+                      </span>
+                      <span className="font-bold text-blue-700">
+                        {cluster.clrPercentage || 0}% <span className="text-[10px] text-slate-400 font-normal">({cluster.clrContribution || 0}%)</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200/70 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-1.5 rounded-full bg-blue-600 transition-all duration-300"
+                        style={{ width: `${cluster.clrPercentage || 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* SF Bar */}
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-0.5">
+                      <span className="font-semibold text-slate-700 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block"></span>
+                        Subfeeder (30%):
+                      </span>
+                      <span className="font-bold text-purple-700">
+                        {cluster.sfPercentage || 0}% <span className="text-[10px] text-slate-400 font-normal">({cluster.sfContribution || 0}%)</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-200/70 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-1.5 rounded-full bg-purple-600 transition-all duration-300"
+                        style={{ width: `${cluster.sfPercentage || 0}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Key items quick stats */}

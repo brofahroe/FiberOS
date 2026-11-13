@@ -14,7 +14,11 @@ interface MatrixRowItem {
   clusterId: string;
   clusterName: string;
   homePasses: number;
+  scope?: string;
+  workType?: string;
   category: string;
+  subCategory?: string | null;
+  weight?: number;
   itemName: string;
   unit: string;
   boq: number;
@@ -37,6 +41,7 @@ export default function MatrixClient({
   initialClusterId?: string;
 }) {
   const [selectedCluster, setSelectedCluster] = useState<string>(initialClusterId || 'ALL');
+  const [selectedScope, setSelectedScope] = useState<'ALL' | 'CLUSTER' | 'SUBFEEDER'>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [exporting, setExporting] = useState<boolean>(false);
   const [rowStatuses, setRowStatuses] = useState<{ [id: string]: string }>({});
@@ -55,8 +60,9 @@ export default function MatrixClient({
   // Filter rows
   const filteredRows = matrixRows.filter((r) => {
     const matchesCluster = selectedCluster === 'ALL' || r.clusterId === selectedCluster;
+    const matchesScope = selectedScope === 'ALL' || (r.scope || 'CLUSTER') === selectedScope;
     const matchesSearch = !searchTerm || r.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || r.clusterName.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCluster && matchesSearch;
+    return matchesCluster && matchesScope && matchesSearch;
   });
 
   const handleExport = async () => {
@@ -140,6 +146,19 @@ export default function MatrixClient({
           </select>
         </div>
 
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">Scope:</span>
+          <select
+            value={selectedScope}
+            onChange={(e) => setSelectedScope(e.target.value as any)}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ALL">Semua Scope (CLR + SF)</option>
+            <option value="CLUSTER">🏙️ Cluster Saja (70%)</option>
+            <option value="SUBFEEDER">📡 Subfeeder Saja (30%)</option>
+          </select>
+        </div>
+
         <div className="relative flex-1 w-full">
           <input
             type="text"
@@ -163,6 +182,9 @@ export default function MatrixClient({
                 </th>
                 <th className="p-3 border-b border-r border-slate-200 w-16 text-center">
                   HP
+                </th>
+                <th className="p-3 border-b border-r border-slate-200 w-24 text-center">
+                  Scope
                 </th>
                 <th className="p-3 border-b border-r border-slate-200 min-w-[200px]">
                   Item Pekerjaan
@@ -198,7 +220,7 @@ export default function MatrixClient({
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={dates.length + 9} className="p-8 text-center text-slate-400">
+                  <td colSpan={dates.length + 10} className="p-8 text-center text-slate-400">
                     Tidak ada data yang sesuai filter.
                   </td>
                 </tr>
@@ -215,6 +237,17 @@ export default function MatrixClient({
                       </td>
                       <td className="p-2.5 text-center border-r border-slate-100 text-slate-500">
                         {row.homePasses || ''}
+                      </td>
+                      <td className="p-2.5 text-center border-r border-slate-100">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            row.scope === 'SUBFEEDER'
+                              ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                              : 'bg-blue-100 text-blue-700 border border-blue-200'
+                          }`}
+                        >
+                          {row.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
+                        </span>
                       </td>
                       <td className="p-2.5 font-medium border-r border-slate-100 text-slate-800">
                         {row.itemName}

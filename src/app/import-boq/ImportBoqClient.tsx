@@ -22,6 +22,7 @@ export default function ImportBoqClient() {
   const [committing, setCommitting] = useState<boolean>(false);
   const [result, setResult] = useState<ParsedBoqResult | null>(null);
   const [clusterName, setClusterName] = useState<string>('');
+  const [scope, setScope] = useState<'CLUSTER' | 'SUBFEEDER'>('CLUSTER');
   const [homePasses, setHomePasses] = useState<string>('0');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -42,6 +43,7 @@ export default function ImportBoqClient() {
       if (res.success && res.data) {
         setResult(res.data);
         setClusterName(res.data.clusterName);
+        setScope(res.data.scope || 'CLUSTER');
       } else {
         setMessage({ type: 'error', text: res.error || 'Gagal membaca file Excel' });
       }
@@ -65,6 +67,7 @@ export default function ImportBoqClient() {
     if (res.success && res.data) {
       setResult(res.data);
       setClusterName(res.data.clusterName);
+      setScope(res.data.scope || 'CLUSTER');
       setMessage({ type: 'success', text: `File contoh "${filename}" berhasil dibaca!` });
     } else {
       setMessage({ type: 'error', text: res.error || 'Gagal membaca file contoh' });
@@ -82,6 +85,7 @@ export default function ImportBoqClient() {
 
     const res = await commitBoqImport({
       clusterName: clusterName.trim(),
+      scope,
       homePasses: parseInt(homePasses) || 0,
       items: result.items,
     });
@@ -218,7 +222,7 @@ export default function ImportBoqClient() {
           </div>
 
           {/* Cluster details inputs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Nama Cluster Target
@@ -230,6 +234,19 @@ export default function ImportBoqClient() {
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Scope Pekerjaan
+              </label>
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as any)}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="CLUSTER">🏙️ Pekerjaan Cluster (Bobot 70%)</option>
+                <option value="SUBFEEDER">📡 Pekerjaan Subfeeder (Bobot 30%)</option>
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">

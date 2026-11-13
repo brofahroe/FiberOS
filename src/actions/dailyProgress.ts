@@ -27,7 +27,11 @@ export async function getClusterItemsForForm(clusterId: string) {
     const status = item.status || (remaining === 0 && item.boq > 0 ? 'DONE' : 'ONGOING');
     return {
       id: item.id,
+      scope: item.scope || 'CLUSTER',
+      workType: item.workType || 'CW',
       category: item.category,
+      subCategory: item.subCategory,
+      weight: item.weight || 0,
       itemName: item.itemName,
       unit: item.unit,
       boq: item.boq,

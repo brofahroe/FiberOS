@@ -26,10 +26,18 @@ export interface ClusterWithProgress {
   totalBoq: number;
   totalInstalled: number;
   percentage: number;
+  clrPercentage: number;
+  sfPercentage: number;
+  clrContribution: number;
+  sfContribution: number;
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
   workItems: Array<{
     id: string;
+    scope?: string;
+    workType?: string;
     category: string;
+    subCategory?: string | null;
+    weight?: number;
     itemName: string;
     unit: string;
     boq: number;

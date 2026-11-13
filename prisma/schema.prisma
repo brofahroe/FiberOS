@@ -37,7 +37,11 @@ model WorkItem {
   id           String              @id @default(cuid())
   clusterId    String
   cluster      Cluster             @relation(fields: [clusterId], references: [id], onDelete: Cascade)
-  category     String              // POLE, CABLE, FAT, FDT, ACCESSORY, OTHER
+  scope        String              @default("CLUSTER") // CLUSTER (CLR) | SUBFEEDER (SF)
+  workType     String              @default("CW")      // CW (Civil Works) | EL (Electrical/Optical)
+  category     String              // POLE, CABLE, FAT, FDT, ACCESSORY, JC, OTHER
+  subCategory  String?             // POLE, CABLE, ACC, FAT, FDT, JC
+  weight       Float               @default(0)         // Bobot persentase spesifik terhadap scope
   itemName     String
   unit         String              @default("pcs")
   boq          Float               @default(0)
@@ -47,7 +51,7 @@ model WorkItem {
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
-  @@unique([clusterId, itemName])
+  @@unique([clusterId, scope, itemName])
 }
 
 model DailyReport {
