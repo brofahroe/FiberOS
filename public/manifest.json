@@ -1,0 +1,81 @@
+{
+  "name": "FiberOS - FTTH Rollout & Progress Management",
+  "short_name": "FiberOS",
+  "description": "Sistem Manajemen Progres Harian & Rollout FTTH ZTE MoraRepublic Kedungtuban Blora",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "categories": ["productivity", "business", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Input Progres Harian",
+      "short_name": "Input Harian",
+      "description": "Catat instalasi tiang, kabel, FAT, FDT hari ini",
+      "url": "/daily-input",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Matriks & BOQ",
+      "short_name": "Matriks",
+      "description": "Tabel matriks instalasi dan progres keseluruhan",
+      "url": "/matrix",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Dashboard Utama",
+      "short_name": "Dashboard",
+      "description": "Ringkasan kurva S dan status cluster",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icons/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}
+
