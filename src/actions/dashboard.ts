@@ -75,17 +75,21 @@ export async function getDashboardData() {
 
     const itemsSummary = cluster.workItems.map((item) => {
       const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
-      clusterBoq += item.boq;
-      clusterInstalled += installed;
+      const isDone = item.status === 'DONE';
+      const remaining = isDone ? 0 : Math.max(0, item.boq - installed);
+      const percentage = isDone
+        ? 100
+        : (item.boq > 0 ? Math.min(100, Math.round((installed / item.boq) * 100)) : (installed > 0 ? 100 : 0));
+      const effectiveInstalled = isDone ? Math.max(installed, item.boq) : installed;
 
-      const remaining = Math.max(0, item.boq - installed);
-      const percentage = item.boq > 0 ? Math.min(100, Math.round((installed / item.boq) * 100)) : (installed > 0 ? 100 : 0);
+      clusterBoq += item.boq;
+      clusterInstalled += effectiveInstalled;
 
       // Aggregate into categories
       const catKey = item.category || 'OTHER';
       const existingCat = catMap.get(catKey) || { boq: 0, installed: 0, unit: item.unit };
       existingCat.boq += item.boq;
-      existingCat.installed += installed;
+      existingCat.installed += effectiveInstalled;
       catMap.set(catKey, existingCat);
 
       return {

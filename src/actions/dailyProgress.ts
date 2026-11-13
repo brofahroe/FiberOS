@@ -22,7 +22,8 @@ export async function getClusterItemsForForm(clusterId: string) {
 
   const items = cluster.workItems.map((item) => {
     const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
-    const remaining = Math.max(0, item.boq - installed);
+    const isDone = item.status === 'DONE';
+    const remaining = isDone ? 0 : Math.max(0, item.boq - installed);
     const status = item.status || (remaining === 0 && item.boq > 0 ? 'DONE' : 'ONGOING');
     return {
       id: item.id,

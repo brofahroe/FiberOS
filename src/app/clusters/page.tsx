@@ -52,13 +52,18 @@ export default async function ClustersPage() {
 
           const items = (cluster.workItems || []).map((it: any) => {
             const installed = (it.progressList || []).reduce((sum: number, p: any) => sum + p.quantity, 0);
+            const isDone = it.status === 'DONE';
+            const remaining = isDone ? 0 : Math.max(0, it.boq - installed);
+            const percentage = isDone
+              ? 100
+              : (it.boq > 0 ? Math.min(100, Math.round((installed / it.boq) * 100)) : 0);
             totalBoq += it.boq;
-            totalInstalled += installed;
+            totalInstalled += isDone ? Math.max(installed, it.boq) : installed;
             return {
               ...it,
               installed,
-              remaining: Math.max(0, it.boq - installed),
-              percentage: it.boq > 0 ? Math.min(100, Math.round((installed / it.boq) * 100)) : 0,
+              remaining,
+              percentage,
             };
           });
 

@@ -77,8 +77,11 @@ export async function getMatrixData(filterClusterId?: string) {
         totalInstalled += prog.quantity;
       }
 
-      const remaining = Math.max(0, item.boq - totalInstalled);
-      const percentage = item.boq > 0 ? Math.min(100, Math.round((totalInstalled / item.boq) * 100)) : (totalInstalled > 0 ? 100 : 0);
+      const isDone = item.status === 'DONE';
+      const remaining = isDone ? 0 : Math.max(0, item.boq - totalInstalled);
+      const percentage = isDone
+        ? 100
+        : (item.boq > 0 ? Math.min(100, Math.round((totalInstalled / item.boq) * 100)) : (totalInstalled > 0 ? 100 : 0));
       const itemStatus = item.status || (percentage >= 100 ? 'DONE' : 'ONGOING');
 
       matrixRows.push({

@@ -205,6 +205,9 @@ export default function MatrixClient({
               ) : (
                 filteredRows.map((row, idx) => {
                   const currentStatus = rowStatuses[row.workItemId] || row.status || 'ONGOING';
+                  const isDone = currentStatus === 'DONE';
+                  const effectiveRemaining = isDone ? 0 : row.remaining;
+                  const effectivePercentage = isDone ? 100 : row.percentage;
                   return (
                     <tr key={idx} className="hover:bg-blue-50/30 transition">
                       <td className="p-2.5 font-bold text-slate-900 border-r border-slate-100 sticky left-0 bg-white">
@@ -239,19 +242,19 @@ export default function MatrixClient({
                         {row.boq.toLocaleString()}
                       </td>
                       <td className="p-2.5 text-right text-slate-600 border-r border-slate-100">
-                        {row.remaining.toLocaleString()}
+                        {effectiveRemaining.toLocaleString()}
                       </td>
                       <td className="p-2.5 text-center border-r border-slate-100">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            row.percentage >= 100
+                            effectivePercentage >= 100
                               ? 'bg-emerald-100 text-emerald-700'
-                              : row.percentage > 0
+                              : effectivePercentage > 0
                               ? 'bg-blue-100 text-blue-700'
                               : 'bg-slate-100 text-slate-500'
                           }`}
                         >
-                          {row.percentage}%
+                          {effectivePercentage}%
                         </span>
                       </td>
                       <td className="p-2 text-center sticky right-0 bg-white shadow-sm">
