@@ -147,7 +147,7 @@ export async function submitDailyProgress(data: {
       });
     }
 
-    // Upsert items progress
+    // Upsert items progress (use set/replace so edits overwrite correctly)
     for (const item of data.items) {
       if (item.quantity > 0) {
         await prisma.dailyProgressItem.upsert({
@@ -158,14 +158,20 @@ export async function submitDailyProgress(data: {
             },
           },
           update: {
-            quantity: {
-              increment: item.quantity,
-            },
+            quantity: item.quantity,
           },
           create: {
             dailyReportId: report.id,
             workItemId: item.workItemId,
             quantity: item.quantity,
+          },
+        });
+      } else {
+        // If user set quantity to 0 in edit mode, remove it from progress
+        await prisma.dailyProgressItem.deleteMany({
+          where: {
+            dailyReportId: report.id,
+            workItemId: item.workItemId,
           },
         });
       }
@@ -179,6 +185,166 @@ export async function submitDailyProgress(data: {
   } catch (error: any) {
     console.error('Error submitting daily progress:', error);
     return { success: false, error: error.message || 'Gagal menyimpan progres' };
+  }
+}
+
+export async function getExistingDailyReport(clusterId: string, reportDate: string) {
+  try {
+    const report = await prisma.dailyReport.findFirst({
+      where: {
+        clusterId,
+        reportDate,
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!report) return { exists: false, report: null };
+
+    return {
+      exists: true,
+      report: {
+        id: report.id,
+        reporterName: report.reporterName || '',
+        teamName: report.teamName || '',
+        weather: report.weather || 'Cerah',
+        notes: report.notes || '',
+        photos: report.photos ? JSON.parse(report.photos) : [],
+        items: report.items.map((it) => ({
+          workItemId: it.workItemId,
+          quantity: it.quantity,
+        })),
+      },
+    };
+  } catch (error: any) {
+    console.error('Error getting existing report:', error);
+    return { exists: false, error: error.message };
+  }
+}
+
+export async function updateDailyCellProgress(
+  clusterId: string,
+  workItemId: string,
+  reportDate: string,
+  newQuantity: number
+) {
+  try {
+    // 1. Find or create DailyReport for this cluster and date
+    let report = await prisma.dailyReport.findFirst({
+      where: {
+        clusterId,
+        reportDate,
+      },
+    });
+
+    if (!report) {
+      report = await prisma.dailyReport.create({
+        data: {
+          clusterId,
+          reportDate,
+          reporterName: 'Supervisor Lapangan',
+          teamName: 'Tim FTTH Blora',
+          notes: 'Koreksi progres via Matriks',
+        },
+      });
+    }
+
+    // 2. If newQuantity <= 0, delete or zero out the item
+    if (newQuantity <= 0) {
+      await prisma.dailyProgressItem.deleteMany({
+        where: {
+          dailyReportId: report.id,
+          workItemId,
+        },
+      });
+    } else {
+      // 3. Upsert with the exact newQuantity
+      await prisma.dailyProgressItem.upsert({
+        where: {
+          dailyReportId_workItemId: {
+            dailyReportId: report.id,
+            workItemId,
+          },
+        },
+        update: {
+          quantity: newQuantity,
+        },
+        create: {
+          dailyReportId: report.id,
+          workItemId,
+          quantity: newQuantity,
+        },
+      });
+    }
+
+    revalidatePath('/');
+    revalidatePath('/matrix');
+    revalidatePath('/clusters');
+
+    return { success: true, message: `Progres tanggal ${reportDate} berhasil diperbarui.` };
+  } catch (error: any) {
+    console.error('Error updating cell progress:', error);
+    return { success: false, error: error.message || 'Gagal memperbarui progres cell.' };
+  }
+}
+
+export async function deleteDailyReportByDate(clusterId: string, reportDate: string) {
+  try {
+    const report = await prisma.dailyReport.findFirst({
+      where: {
+        clusterId,
+        reportDate,
+      },
+    });
+
+    if (!report) {
+      return { success: false, error: 'Laporan tidak ditemukan.' };
+    }
+
+    // Delete progress items first (cascade will handle it, but explicit delete is safe)
+    await prisma.dailyProgressItem.deleteMany({
+      where: { dailyReportId: report.id },
+    });
+
+    await prisma.dailyReport.delete({
+      where: { id: report.id },
+    });
+
+    revalidatePath('/');
+    revalidatePath('/matrix');
+    revalidatePath('/clusters');
+
+    return { success: true, message: `Laporan progres tanggal ${reportDate} berhasil dihapus.` };
+  } catch (error: any) {
+    console.error('Error deleting daily report:', error);
+    return { success: false, error: error.message || 'Gagal menghapus laporan.' };
+  }
+}
+
+export async function getDailyReportsHistory(limit: number = 50) {
+  try {
+    const reports = await prisma.dailyReport.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        cluster: {
+          select: { id: true, name: true },
+        },
+        items: {
+          include: {
+            workItem: {
+              select: { itemName: true, unit: true, scope: true, category: true },
+            },
+          },
+        },
+      },
+    });
+
+    return { success: true, reports };
+  } catch (error: any) {
+    console.error('Error fetching reports history:', error);
+    return { success: false, reports: [] };
   }
 }
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { exportMatrixToExcel, updateWorkItemStatus } from '@/actions/matrix';
-import { Download, Search, Filter, Loader2, FileSpreadsheet } from 'lucide-react';
+import { updateDailyCellProgress } from '@/actions/dailyProgress';
+import { Download, Search, Filter, Loader2, FileSpreadsheet, Edit3, Trash2, X, Check, AlertCircle } from 'lucide-react';
 
 interface ClusterInfo {
   id: string;
@@ -29,6 +30,16 @@ interface MatrixRowItem {
   dailyValues: { [dateStr: string]: number };
 }
 
+interface EditingCellState {
+  clusterId: string;
+  clusterName: string;
+  workItemId: string;
+  itemName: string;
+  unit: string;
+  dateStr: string;
+  currentValue: number;
+}
+
 export default function MatrixClient({
   dates,
   matrixRows,
@@ -40,12 +51,22 @@ export default function MatrixClient({
   clustersList: ClusterInfo[];
   initialClusterId?: string;
 }) {
+  const [rows, setRows] = useState<MatrixRowItem[]>(matrixRows);
   const [selectedCluster, setSelectedCluster] = useState<string>(initialClusterId || 'ALL');
   const [selectedScope, setSelectedScope] = useState<'ALL' | 'CLUSTER' | 'SUBFEEDER'>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [exporting, setExporting] = useState<boolean>(false);
   const [rowStatuses, setRowStatuses] = useState<{ [id: string]: string }>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Edit cell modal state
+  const [editingCell, setEditingCell] = useState<EditingCellState | null>(null);
+  const [newQuantityInput, setNewQuantityInput] = useState<string>('');
+  const [savingCell, setSavingCell] = useState<boolean>(false);
+
+  useEffect(() => {
+    setRows(matrixRows);
+  }, [matrixRows]);
 
   const handleStatusChange = async (workItemId: string, newStatus: string) => {
     setRowStatuses((prev) => ({ ...prev, [workItemId]: newStatus }));
@@ -57,8 +78,75 @@ export default function MatrixClient({
     }
   };
 
+  const handleOpenEditCell = (row: MatrixRowItem, dateStr: string) => {
+    const currentVal = row.dailyValues[dateStr] || 0;
+    const clusterName = row.clusterName || clustersList.find((c) => c.id === row.clusterId)?.name || 'Cluster';
+    setEditingCell({
+      clusterId: row.clusterId,
+      clusterName,
+      workItemId: row.workItemId,
+      itemName: row.itemName,
+      unit: row.unit,
+      dateStr,
+      currentValue: currentVal,
+    });
+    setNewQuantityInput(currentVal > 0 ? String(currentVal) : '');
+  };
+
+  const handleSaveCell = async (newVal: number) => {
+    if (!editingCell) return;
+    setSavingCell(true);
+    const res = await updateDailyCellProgress(
+      editingCell.clusterId,
+      editingCell.workItemId,
+      editingCell.dateStr,
+      newVal
+    );
+    setSavingCell(false);
+
+    if (res.success) {
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.workItemId === editingCell.workItemId) {
+            const oldVal = r.dailyValues[editingCell.dateStr] || 0;
+            const diff = newVal - oldVal;
+            const newTotal = Math.max(0, Math.round((r.totalInstalled + diff) * 10) / 10);
+            const isDone = (rowStatuses[r.workItemId] || r.status) === 'DONE';
+            const newRemaining = isDone ? 0 : Math.max(0, Math.round((r.boq - newTotal) * 10) / 10);
+            const newPct = isDone
+              ? 100
+              : r.boq > 0
+              ? Math.min(100, Math.round((newTotal / r.boq) * 100))
+              : newTotal > 0
+              ? 100
+              : 0;
+
+            const updatedDaily = { ...r.dailyValues };
+            if (newVal > 0) {
+              updatedDaily[editingCell.dateStr] = newVal;
+            } else {
+              delete updatedDaily[editingCell.dateStr];
+            }
+
+            return {
+              ...r,
+              totalInstalled: newTotal,
+              remaining: newRemaining,
+              percentage: newPct,
+              dailyValues: updatedDaily,
+            };
+          }
+          return r;
+        })
+      );
+      setEditingCell(null);
+    } else {
+      alert(res.error || 'Gagal menyimpan perubahan');
+    }
+  };
+
   // Filter rows
-  const filteredRows = matrixRows.filter((r) => {
+  const filteredRows = rows.filter((r) => {
     const matchesCluster = selectedCluster === 'ALL' || r.clusterId === selectedCluster;
     const matchesScope = selectedScope === 'ALL' || (r.scope || 'CLUSTER') === selectedScope;
     const matchesSearch = !searchTerm || r.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || r.clusterName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -171,6 +259,12 @@ export default function MatrixClient({
         </div>
       </div>
 
+      {/* Tip Banner */}
+      <div className="flex items-center gap-2 text-xs text-slate-600 bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-xl">
+        <span className="text-blue-700 font-bold">💡 Fitur Koreksi:</span>
+        <span>Jika ada salah input atau salah tanggal, cukup <strong>klik angka pada kolom tanggal</strong> di tabel untuk langsung mengedit nilai volume atau menghapusnya.</span>
+      </div>
+
       {/* The Matrix Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto max-h-[70vh]">
@@ -260,11 +354,15 @@ export default function MatrixClient({
                         return (
                           <td
                             key={dateStr}
-                            className={`p-2 text-center border-r border-slate-100 ${
-                              val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300'
+                            onClick={() => handleOpenEditCell(row, dateStr)}
+                            title="Klik untuk mengoreksi volume atau menghapus salah input"
+                            className={`p-2 text-center border-r border-slate-100 cursor-pointer transition hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 select-none group ${
+                              val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
                             }`}
                           >
-                            {val || '-'}
+                            <span className="inline-block px-1 rounded">
+                              {val || '-'}
+                            </span>
                           </td>
                         );
                       })}
@@ -316,6 +414,116 @@ export default function MatrixClient({
           </table>
         </div>
       </div>
+
+      {/* Edit Cell Modal */}
+      {editingCell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Koreksi Volume Harian</h3>
+                  <p className="text-[11px] text-slate-500">Koreksi jika terjadi salah ketik atau salah input tanggal</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingCell(null)}
+                disabled={savingCell}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Cluster:</span>
+                  <span className="font-bold text-slate-800">{editingCell.clusterName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Item Pekerjaan:</span>
+                  <span className="font-bold text-slate-800 text-right">{editingCell.itemName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Tanggal Progres:</span>
+                  <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    {editingCell.dateStr}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-medium">Volume Saat Ini:</span>
+                  <span className="font-bold text-slate-700">
+                    {editingCell.currentValue} {editingCell.unit}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Volume Baru ({editingCell.unit})
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    autoFocus
+                    value={newQuantityInput}
+                    onChange={(e) => setNewQuantityInput(e.target.value)}
+                    placeholder="Ketik volume baru (misal: 25)..."
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="absolute right-3 top-2.5 text-xs font-semibold text-slate-400 pointer-events-none">
+                    {editingCell.unit}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Ketik 0 atau kosongkan untuk menghapus/membatalkan progres tanggal ini.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={savingCell}
+                  onClick={() => handleSaveCell(parseFloat(newQuantityInput) || 0)}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition disabled:opacity-50"
+                >
+                  {savingCell ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
+                  <span>Simpan Perubahan</span>
+                </button>
+
+                {editingCell.currentValue > 0 && (
+                  <button
+                    type="button"
+                    disabled={savingCell}
+                    onClick={() => {
+                      if (confirm(`Yakin ingin menghapus progres ${editingCell.itemName} tanggal ${editingCell.dateStr}?`)) {
+                        handleSaveCell(0);
+                      }
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

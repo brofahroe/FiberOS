@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getClusterItemsForForm, submitDailyProgress } from '@/actions/dailyProgress';
+import { getClusterItemsForForm, submitDailyProgress, getExistingDailyReport, deleteDailyReportByDate } from '@/actions/dailyProgress';
 import { compressImage } from '@/lib/imageCompression';
 import { 
   Building2, 
@@ -20,7 +20,9 @@ import {
   Cpu, 
   Layers,
   X,
-  CloudSun
+  CloudSun,
+  Trash2,
+  Edit3
 } from 'lucide-react';
 
 interface ClusterOption {
@@ -48,15 +50,18 @@ interface ItemState {
 export default function DailyInputClient({
   clusters,
   initialClusterId,
+  initialDate,
 }: {
   clusters: ClusterOption[];
   initialClusterId?: string;
+  initialDate?: string;
 }) {
   const router = useRouter();
 
   // Header form states
   const [selectedClusterId, setSelectedClusterId] = useState<string>(initialClusterId || clusters[0]?.id || '');
   const [reportDate, setReportDate] = useState<string>(() => {
+    if (initialDate) return initialDate;
     const today = new Date();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${today.getDate()}-${months[today.getMonth()]}-${today.getFullYear().toString().slice(-2)}`;
@@ -74,6 +79,11 @@ export default function DailyInputClient({
   const [compressing, setCompressing] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Edit / correction mode state
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [checkingReport, setCheckingReport] = useState<boolean>(false);
+  const [deletingReport, setDeletingReport] = useState<boolean>(false);
 
   // Load reporter and team from localStorage
   useEffect(() => {
@@ -119,6 +129,69 @@ export default function DailyInputClient({
       isMounted = false;
     };
   }, [selectedClusterId]);
+
+  // Check if report already exists for selectedClusterId and reportDate
+  useEffect(() => {
+    if (!selectedClusterId || !reportDate) return;
+
+    let isMounted = true;
+    setCheckingReport(true);
+
+    getExistingDailyReport(selectedClusterId, reportDate.trim()).then((res) => {
+      if (!isMounted) return;
+      setCheckingReport(false);
+
+      if (res && res.exists && res.report) {
+        setIsEditMode(true);
+        if (res.report.reporterName) setReporterName(res.report.reporterName);
+        if (res.report.teamName) setTeamName(res.report.teamName);
+        if (res.report.weather) setWeather(res.report.weather);
+        if (res.report.notes) setNotes(res.report.notes);
+        if (res.report.photos && res.report.photos.length > 0) setPhotos(res.report.photos);
+
+        const qtyMap = new Map<string, number>();
+        res.report.items.forEach((it: any) => qtyMap.set(it.workItemId, it.quantity));
+
+        setItems((prev) =>
+          prev.map((it) => {
+            const recorded = qtyMap.get(it.id);
+            return {
+              ...it,
+              todayQty: recorded !== undefined && recorded > 0 ? String(recorded) : '',
+            };
+          })
+        );
+      } else {
+        setIsEditMode(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedClusterId, reportDate]);
+
+  const handleDeleteReport = async () => {
+    const clusterName = clusters.find((c) => c.id === selectedClusterId)?.name || 'Cluster';
+    if (!confirm(`Yakin ingin menghapus seluruh laporan progres untuk cluster "${clusterName}" pada tanggal "${reportDate}"?`)) {
+      return;
+    }
+
+    setDeletingReport(true);
+    const res = await deleteDailyReportByDate(selectedClusterId, reportDate.trim());
+    setDeletingReport(false);
+
+    if (res.success) {
+      setMessage({ type: 'success', text: res.message || 'Laporan berhasil dihapus.' });
+      setIsEditMode(false);
+      setItems((prev) => prev.map((it) => ({ ...it, todayQty: '' })));
+      setNotes('');
+      setPhotos([]);
+      router.refresh();
+    } else {
+      setMessage({ type: 'error', text: res.error || 'Gagal menghapus laporan.' });
+    }
+  };
 
   const handleQtyChange = (itemId: string, val: string) => {
     setItems((prev) =>
@@ -354,6 +427,44 @@ export default function DailyInputClient({
             </div>
           </div>
         </div>
+
+        {/* Existing Report Found / Edit Mode Notice */}
+        {checkingReport && (
+          <div className="flex items-center gap-2 text-xs text-blue-600 font-medium py-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Memeriksa riwayat laporan pada tanggal ini...</span>
+          </div>
+        )}
+
+        {isEditMode && !checkingReport && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <span className="font-bold text-xs sm:text-sm block text-amber-950">
+                  Mode Koreksi / Edit Laporan Aktif
+                </span>
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  Ditemukan laporan tersimpan untuk tanggal <strong>{reportDate}</strong>. Anda dapat mengoreksi volume pekerjaan di bawah, atau menghapus seluruh laporan jika terjadi salah input.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDeleteReport}
+              disabled={deletingReport}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shrink-0 transition shadow-sm"
+            >
+              {deletingReport ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" />
+              )}
+              <span>Hapus Laporan Ini</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Section 2: Work Items Input (Grouped by Category) */}
@@ -622,8 +733,8 @@ export default function DailyInputClient({
             </>
           ) : (
             <>
-              <Send className="w-4 h-4" />
-              <span>Kirim Laporan Harian</span>
+              {isEditMode ? <Edit3 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+              <span>{isEditMode ? 'Simpan Koreksi Laporan' : 'Kirim Laporan Harian'}</span>
             </>
           )}
         </button>

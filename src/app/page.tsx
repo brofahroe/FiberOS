@@ -14,7 +14,8 @@ import {
   HardHat,
   Cable,
   Box,
-  Cpu
+  Cpu,
+  Edit3
 } from 'lucide-react';
 
 export const revalidate = 0; // Fresh on every request
@@ -350,8 +351,17 @@ export default async function DashboardPage() {
                     {rep.notes ? ` — "${rep.notes}"` : ''}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg self-start sm:self-auto">
-                  {rep.items.length} item terupdate
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                    {rep.items.length} item terupdate
+                  </span>
+                  <Link
+                    href={`/daily-input?clusterId=${rep.clusterId}&date=${encodeURIComponent(rep.reportDate)}`}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 px-2.5 py-1 rounded-lg transition"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </Link>
                 </div>
               </div>
             ))}
