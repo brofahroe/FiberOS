@@ -22,8 +22,10 @@ import {
   X,
   CloudSun,
   Trash2,
-  Edit3
+  Edit3,
+  MessageSquare
 } from 'lucide-react';
+import WhatsAppReportModal from '@/components/WhatsAppReportModal';
 
 interface ClusterOption {
   id: string;
@@ -84,6 +86,7 @@ export default function DailyInputClient({
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [checkingReport, setCheckingReport] = useState<boolean>(false);
   const [deletingReport, setDeletingReport] = useState<boolean>(false);
+  const [showWaModal, setShowWaModal] = useState<boolean>(false);
 
   // Load reporter and team from localStorage
   useEffect(() => {
@@ -297,7 +300,7 @@ export default function DailyInputClient({
   return (
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
       {/* Page Title & Back Link */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
             Form Input Progres Harian
@@ -306,22 +309,44 @@ export default function DailyInputClient({
             Input hasil instalasi lapangan per cluster per hari dengan validasi BOQ otomatis.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowWaModal(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition transform active:scale-95 self-start sm:self-auto"
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>📲 Format Laporan WA</span>
+        </button>
       </div>
 
       {message && (
         <div
-          className={`p-4 rounded-xl flex items-center gap-3 text-sm font-medium ${
+          className={`p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm font-medium ${
             message.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
               : 'bg-rose-50 text-rose-800 border border-rose-200'
           }`}
         >
-          {message.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          <div className="flex items-center gap-3">
+            {message.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            )}
+            <span>{message.text}</span>
+          </div>
+
+          {message.type === 'success' && (
+            <button
+              type="button"
+              onClick={() => setShowWaModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm self-start sm:self-auto"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Salin Format WA</span>
+            </button>
           )}
-          <span>{message.text}</span>
         </div>
       )}
 
@@ -739,6 +764,13 @@ export default function DailyInputClient({
           )}
         </button>
       </div>
+
+      <WhatsAppReportModal
+        isOpen={showWaModal}
+        onClose={() => setShowWaModal(false)}
+        clusterId={selectedClusterId}
+        reportDate={reportDate}
+      />
     </form>
   );
 }

@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { exportMatrixToExcel, updateWorkItemStatus } from '@/actions/matrix';
 import { updateDailyCellProgress } from '@/actions/dailyProgress';
-import { Download, Search, Filter, Loader2, FileSpreadsheet, Edit3, Trash2, X, Check, AlertCircle } from 'lucide-react';
+import { Download, Search, Filter, Loader2, FileSpreadsheet, Edit3, Trash2, X, Check, AlertCircle, MessageSquare } from 'lucide-react';
+import WhatsAppReportModal from '@/components/WhatsAppReportModal';
 
 interface ClusterInfo {
   id: string;
@@ -63,6 +64,13 @@ export default function MatrixClient({
   const [editingCell, setEditingCell] = useState<EditingCellState | null>(null);
   const [newQuantityInput, setNewQuantityInput] = useState<string>('');
   const [savingCell, setSavingCell] = useState<boolean>(false);
+
+  // WhatsApp modal state
+  const [showWaModal, setShowWaModal] = useState<boolean>(false);
+  const [waTarget, setWaTarget] = useState<{ clusterId: string; dateStr: string }>({
+    clusterId: '',
+    dateStr: '',
+  });
 
   useEffect(() => {
     setRows(matrixRows);
@@ -211,6 +219,20 @@ export default function MatrixClient({
               <Download className="w-4 h-4" />
             )}
             <span>Export to Excel (.xlsx)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const targetClusterId = selectedCluster !== 'ALL' ? selectedCluster : (clustersList[0]?.id || '');
+              const latestDate = dates[dates.length - 1] || '12-Nov-26';
+              setWaTarget({ clusterId: targetClusterId, dateStr: latestDate });
+              setShowWaModal(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-emerald-400 border border-slate-800 rounded-xl text-xs font-bold shadow-md transition"
+          >
+            <MessageSquare className="w-4 h-4 text-emerald-400" />
+            <span>Format WA</span>
           </button>
         </div>
       </div>
@@ -523,6 +545,16 @@ export default function MatrixClient({
             </div>
           </div>
         </div>
+      )}
+
+      {/* WhatsApp Report Modal */}
+      {showWaModal && (
+        <WhatsAppReportModal
+          isOpen={showWaModal}
+          onClose={() => setShowWaModal(false)}
+          clusterId={waTarget.clusterId || (selectedCluster !== 'ALL' ? selectedCluster : (clustersList[0]?.id || ''))}
+          reportDate={waTarget.dateStr || (dates[dates.length - 1] || '12-Nov-26')}
+        />
       )}
     </div>
   );
