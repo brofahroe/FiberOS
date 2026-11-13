@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
+import { uploadFileToNextcloud } from '@/lib/nextcloud';
 
 export async function getClusterItemsForForm(clusterId: string) {
   const cluster = await prisma.cluster.findUnique({
@@ -77,35 +78,46 @@ export async function submitDailyProgress(data: {
       }
     }
 
-    // Process photos if any
+    // Process photos with Nextcloud cloud storage
     const savedPhotoPaths: string[] = [];
     if (data.photoBase64List && data.photoBase64List.length > 0) {
       for (let i = 0; i < data.photoBase64List.length; i++) {
-        const base64Str = data.photoBase64List[i];
-        if (process.env.VERCEL) {
-          // On Vercel serverless, store compressed base64 directly in database
-          savedPhotoPaths.push(base64Str);
-        } else {
+        const photoStr = data.photoBase64List[i];
+
+        // If it's already an uploaded URL from a previous save, keep it
+        if (photoStr.startsWith('/api/photos/') || photoStr.startsWith('http')) {
+          savedPhotoPaths.push(photoStr);
+          continue;
+        }
+
+        const matches = photoStr.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const mimeType = matches[1];
+          const ext = mimeType.includes('png') ? 'png' : 'jpg';
+          const buffer = Buffer.from(matches[2], 'base64');
+          const fileName = `doc-${Date.now()}-${i}.${ext}`;
+
           try {
-            const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-            if (!fs.existsSync(uploadsDir)) {
-              fs.mkdirSync(uploadsDir, { recursive: true });
-            }
-            const matches = base64Str.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
-            if (matches && matches.length === 3) {
-              const ext = matches[1].includes('png') ? 'png' : 'jpg';
-              const buffer = Buffer.from(matches[2], 'base64');
-              const fileName = `doc-${Date.now()}-${i}.${ext}`;
-              const filePath = path.join(uploadsDir, fileName);
-              fs.writeFileSync(filePath, buffer);
-              savedPhotoPaths.push(`/uploads/${fileName}`);
+            // Upload to Nextcloud under foto-imple/[clusterId]
+            const uploadRes = await uploadFileToNextcloud({
+              buffer,
+              fileName,
+              subFolder: data.clusterId,
+              contentType: mimeType,
+            });
+
+            if (uploadRes.success) {
+              savedPhotoPaths.push(uploadRes.url);
             } else {
-              savedPhotoPaths.push(base64Str);
+              console.warn('Nextcloud upload failed, using fallback:', uploadRes.error);
+              savedPhotoPaths.push(photoStr);
             }
-          } catch {
-            // Fallback to base64 if filesystem is read-only
-            savedPhotoPaths.push(base64Str);
+          } catch (err) {
+            console.error('Nextcloud upload error:', err);
+            savedPhotoPaths.push(photoStr);
           }
+        } else {
+          savedPhotoPaths.push(photoStr);
         }
       }
     }
