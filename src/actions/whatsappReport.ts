@@ -18,6 +18,8 @@ export interface WaReportData {
   startImDate: string;
   reporterName: string;
   teamName: string;
+  availableClusters: Array<{ id: string; name: string; code?: string | null }>;
+  availableDates: string[];
   distribusi: {
     pole: WaReportItemMetrics;
     cable: WaReportItemMetrics;
@@ -30,6 +32,19 @@ export interface WaReportData {
     cable: WaReportItemMetrics;
     jc: WaReportItemMetrics;
   };
+}
+
+function normalizeDateStr(d: string): string {
+  if (!d) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // If YYYY-MM-DD
+  if (d.includes('-') && d.split('-')[0].length === 4) {
+    const [yyyy, mm, dd] = d.split('-');
+    const mIdx = parseInt(mm, 10) - 1;
+    const day = parseInt(dd, 10);
+    return `${day}-${months[mIdx]}-${yyyy.slice(-2)}`.toLowerCase();
+  }
+  return d.trim().toLowerCase();
 }
 
 function formatIndoDate(d: string): string {
@@ -47,10 +62,50 @@ function formatIndoDate(d: string): string {
   return d;
 }
 
-export async function getWhatsAppReportData(clusterId: string, reportDate: string): Promise<{ success: boolean; data?: WaReportData; error?: string }> {
+export async function getWhatsAppReportData(
+  clusterId?: string,
+  reportDate?: string
+): Promise<{ success: boolean; data?: WaReportData; error?: string }> {
   try {
+    // 1. Get all clusters for dropdown selection
+    const allClusters = await prisma.cluster.findMany({
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (allClusters.length === 0) {
+      return { success: false, error: 'Belum ada cluster di sistem.' };
+    }
+
+    const targetClusterInfo = clusterId
+      ? allClusters.find((c) => c.id === clusterId) || allClusters[0]
+      : allClusters[0];
+    const targetClusterId = targetClusterInfo.id;
+
+    // 2. Get available dates from daily reports
+    const clusterReports = await prisma.dailyReport.findMany({
+      where: { clusterId: targetClusterId },
+      select: { reportDate: true, reporterName: true, teamName: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const allReports = await prisma.dailyReport.findMany({
+      select: { reportDate: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const clusterDates = Array.from(new Set(clusterReports.map((r) => r.reportDate)));
+    const allUniqueDates = Array.from(new Set(allReports.map((r) => r.reportDate)));
+    const availableDates = Array.from(new Set([...clusterDates, ...allUniqueDates]));
+
+    let targetReportDate = reportDate;
+    if (!targetReportDate || targetReportDate.trim() === '') {
+      targetReportDate = clusterDates[0] || availableDates[0] || '12-Nov-26';
+    }
+
+    // 3. Fetch cluster with workItems and progress
     const cluster = await prisma.cluster.findUnique({
-      where: { id: clusterId },
+      where: { id: targetClusterId },
       include: {
         workItems: {
           include: {
@@ -70,13 +125,16 @@ export async function getWhatsAppReportData(clusterId: string, reportDate: strin
 
     const report = await prisma.dailyReport.findFirst({
       where: {
-        clusterId,
-        reportDate,
+        clusterId: targetClusterId,
+        reportDate: targetReportDate,
       },
     });
 
     // Helper to calculate metric for items matching filter
-    const calcMetrics = (scope: 'CLUSTER' | 'SUBFEEDER', categoryMatch: (name: string, cat: string, sub: string) => boolean): WaReportItemMetrics => {
+    const calcMetrics = (
+      scope: 'CLUSTER' | 'SUBFEEDER',
+      categoryMatch: (name: string, cat: string, sub: string) => boolean
+    ): WaReportItemMetrics => {
       let boq = 0;
       let actual = 0;
       let today = 0;
@@ -97,7 +155,8 @@ export async function getWhatsAppReportData(clusterId: string, reportDate: strin
 
           for (const prog of item.progressList) {
             actual += prog.quantity;
-            if (prog.dailyReport.reportDate === reportDate) {
+            const pDate = prog.dailyReport.reportDate;
+            if (pDate === targetReportDate || normalizeDateStr(pDate) === normalizeDateStr(targetReportDate)) {
               today += prog.quantity;
             }
           }
@@ -126,7 +185,7 @@ export async function getWhatsAppReportData(clusterId: string, reportDate: strin
     const sfCable = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
     const sfJc = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'JC' || cat === 'JC' || name.includes('jc') || name.includes('joint closure'));
 
-    const siteId = cluster.code || `CLRMO7-99-${cluster.name.slice(0, 3).toUpperCase()}`;
+    const siteId = cluster.code || `CLRMO7-99-${cluster.name.toUpperCase()}`;
 
     return {
       success: true,
@@ -134,11 +193,13 @@ export async function getWhatsAppReportData(clusterId: string, reportDate: strin
         clusterId: cluster.id,
         clusterName: cluster.name,
         siteId,
-        reportDate,
-        formattedDate: formatIndoDate(reportDate),
+        reportDate: targetReportDate,
+        formattedDate: formatIndoDate(targetReportDate),
         startImDate: '01/11/26',
         reporterName: report?.reporterName || '',
         teamName: report?.teamName || '',
+        availableClusters: allClusters,
+        availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
         distribusi: {
           pole: clrPole,
           cable: clrCable,

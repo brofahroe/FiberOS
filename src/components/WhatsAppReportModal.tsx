@@ -12,7 +12,10 @@ import {
   Settings2, 
   ChevronDown, 
   ChevronUp,
-  Share2
+  Share2,
+  Building2,
+  Calendar,
+  RotateCcw,
 } from 'lucide-react';
 
 interface WhatsAppReportModalProps {
@@ -30,10 +33,16 @@ export default function WhatsAppReportModal({
   reportDate,
   clusterName: initialClusterName,
 }: WhatsAppReportModalProps) {
+  const [selectedClusterId, setSelectedClusterId] = useState<string>(clusterId);
+  const [selectedReportDate, setSelectedReportDate] = useState<string>(reportDate);
+  const [clustersList, setClustersList] = useState<Array<{ id: string; name: string; code?: string | null }>>([]);
+  const [datesList, setDatesList] = useState<string[]>([]);
+
   const [loading, setLoading] = useState<boolean>(true);
   const [data, setData] = useState<WaReportData | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [customMessage, setCustomMessage] = useState<string | null>(null);
 
   // Customizable Metadata (saved in localStorage)
   const [siteName, setSiteName] = useState<string>('');
@@ -47,6 +56,12 @@ export default function WhatsAppReportModal({
   const [startImDate, setStartImDate] = useState<string>('01/11/26');
   const [planAtpCw, setPlanAtpCw] = useState<string>('DD/MM/YY');
   const [planAtpOpm, setPlanAtpOpm] = useState<string>('0/0/2026');
+
+  // Sync initial props
+  useEffect(() => {
+    if (clusterId) setSelectedClusterId(clusterId);
+    if (reportDate) setSelectedReportDate(reportDate);
+  }, [clusterId, reportDate]);
 
   // Load saved preferences
   useEffect(() => {
@@ -87,24 +102,44 @@ export default function WhatsAppReportModal({
     }
   };
 
-  useEffect(() => {
-    if (!isOpen || !clusterId || !reportDate) return;
-
+  const loadReportData = async (cId: string, rDate: string) => {
     setLoading(true);
     setCopied(false);
 
-    getWhatsAppReportData(clusterId, reportDate).then((res) => {
-      setLoading(false);
-      if (res.success && res.data) {
-        setData(res.data);
-        const autoSiteName = `KELURAHAN ${res.data.clusterName.toUpperCase()} BLORA`;
-        setSiteName(autoSiteName);
-        if (res.data.siteId) setSiteId(res.data.siteId);
-        if (res.data.reporterName) setSubconLeader(res.data.reporterName);
-        if (res.data.teamName) setSubconName(res.data.teamName);
+    const res = await getWhatsAppReportData(cId, rDate);
+    setLoading(false);
+
+    if (res.success && res.data) {
+      setData(res.data);
+      if (res.data.availableClusters && res.data.availableClusters.length > 0) {
+        setClustersList(res.data.availableClusters);
       }
-    });
-  }, [isOpen, clusterId, reportDate]);
+      if (res.data.availableDates && res.data.availableDates.length > 0) {
+        setDatesList(res.data.availableDates);
+      }
+
+      // Automatically update siteName and siteId for the selected cluster
+      const autoSiteName = `KELURAHAN ${res.data.clusterName.toUpperCase()} BLORA`;
+      setSiteName(autoSiteName);
+      if (res.data.siteId) setSiteId(res.data.siteId);
+      if (res.data.reporterName) setSubconLeader(res.data.reporterName);
+      if (res.data.teamName) setSubconName(res.data.teamName);
+      setCustomMessage(null); // Reset manual edit to show fresh report
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    loadReportData(selectedClusterId, selectedReportDate);
+  }, [isOpen, selectedClusterId, selectedReportDate]);
+
+  const handleClusterSelect = (newClusterId: string) => {
+    setSelectedClusterId(newClusterId);
+  };
+
+  const handleDateSelect = (newDate: string) => {
+    setSelectedReportDate(newDate);
+  };
 
   if (!isOpen) return null;
 
@@ -118,10 +153,12 @@ export default function WhatsAppReportModal({
       const actStr = formatNumber(item.actual);
       
       let todayStr = formatNumber(item.today);
-      if (item.today > 0 && (item.isDone || item.actual >= item.boq)) {
+      if (item.today > 0) {
         todayStr = `${todayStr}✅`;
-      } else if (item.today === 0 && (item.isDone || (item.boq > 0 && item.actual >= item.boq))) {
+      } else if (item.isDone || (item.boq > 0 && item.actual >= item.boq)) {
         todayStr = '✅';
+      } else {
+        todayStr = '0';
       }
 
       return `${boqStr}/${actStr}/${todayStr}`;
@@ -176,20 +213,21 @@ Progress Today :
  
 Install pole CLR: ${d.pole.today > 0 ? `${formatNumber(d.pole.today)} pole` : '- pole'}
 Install pole SF: ${s.pole.today > 0 ? `${formatNumber(s.pole.today)} pole` : '- pole'}
-Puling Cable CLR :  ${d.cable.today > 0 ? `${formatNumber(d.cable.today)} m` : ' m'}
+Puling Cable CLR :  ${d.cable.today > 0 ? `${formatNumber(d.cable.today)} m` : '- m'}
 Pulling Cable SF: ${s.cable.today > 0 ? `${formatNumber(s.cable.today)} m` : '-'}
 Install Slingware :  ${d.wireSling.today > 0 ? `${formatNumber(d.wireSling.today)} m` : '- m'}
 Install FDT : ${d.fdt.today > 0 ? formatNumber(d.fdt.today) : ''}
-Install FAT : ${d.fat.today}
-Install JC : ${s.jc.today}`;
+Install FAT : ${d.fat.today > 0 ? formatNumber(d.fat.today) : '0'}
+Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
   };
 
-  const waMessage = buildWaText();
+  const generatedWaText = buildWaText();
+  const currentMessageText = customMessage !== null ? customMessage : generatedWaText;
 
   const handleCopy = async () => {
     saveSettings();
     try {
-      await navigator.clipboard.writeText(waMessage);
+      await navigator.clipboard.writeText(currentMessageText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
@@ -199,13 +237,13 @@ Install JC : ${s.jc.today}`;
 
   const handleOpenWhatsApp = () => {
     saveSettings();
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(waMessage)}`;
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(currentMessageText)}`;
     window.open(url, '_blank');
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+      <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/80">
           <div className="flex items-center gap-3">
@@ -232,10 +270,49 @@ Install JC : ${s.jc.today}`;
 
         {/* Content Body */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
+          {/* Cluster & Tanggal Dropdown Selectors */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3.5 shadow-xs">
+            <div>
+              <label className="text-xs font-bold text-emerald-950 block mb-1.5 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-emerald-700" />
+                <span>Pilih Cluster (Drop-down):</span>
+              </label>
+              <select
+                value={selectedClusterId}
+                onChange={(e) => handleClusterSelect(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
+              >
+                {clustersList.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-emerald-950 block mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-emerald-700" />
+                <span>Tanggal Input Harian:</span>
+              </label>
+              <select
+                value={selectedReportDate}
+                onChange={(e) => handleDateSelect(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
+              >
+                {datesList.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {loading ? (
             <div className="py-16 text-center text-slate-500 space-y-3">
               <Loader2 className="w-8 h-8 animate-spin mx-auto text-emerald-600" />
-              <p className="text-sm font-semibold">Mengompilasi data format WhatsApp...</p>
+              <p className="text-sm font-semibold">Mengompilasi data format WhatsApp dari input harian...</p>
             </div>
           ) : (
             <>
@@ -260,7 +337,7 @@ Install JC : ${s.jc.today}`;
                 {showSettings && (
                   <div className="p-4 border-t border-slate-200 bg-white grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
-                      <label className="font-semibold text-slate-600 block mb-1">Site Name</label>
+                      <label className="font-semibold text-slate-600 block mb-1">Site Name (Nama Cluster)</label>
                       <input
                         type="text"
                         value={siteName}
@@ -338,15 +415,34 @@ Install JC : ${s.jc.today}`;
               {/* Message Preview Box */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-slate-700">Preview Pesan:</span>
-                  <span className="text-[11px] text-slate-400">Siap kirim ke Group WhatsApp</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Preview Pesan:</span>
+                    {customMessage !== null && (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                        Diedit Manual
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {customMessage !== null && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomMessage(null)}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 transition"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset ke Auto</span>
+                      </button>
+                    )}
+                    <span className="text-[11px] text-slate-400">Dapat diedit langsung sebelum dikirim</span>
+                  </div>
                 </div>
                 <div className="relative">
                   <textarea
-                    readOnly
-                    value={waMessage}
+                    value={currentMessageText}
+                    onChange={(e) => setCustomMessage(e.target.value)}
                     rows={15}
-                    className="w-full p-4 bg-slate-900 text-emerald-300 font-mono text-xs rounded-2xl focus:outline-none shadow-inner leading-relaxed resize-none selection:bg-emerald-600 selection:text-white"
+                    className="w-full p-4 bg-slate-900 text-emerald-300 font-mono text-xs rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner leading-relaxed resize-none selection:bg-emerald-600 selection:text-white"
                   />
                   {copied && (
                     <div className="absolute top-3 right-3 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg animate-in fade-in duration-200">
@@ -378,16 +474,16 @@ Install JC : ${s.jc.today}`;
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              <span>{copied ? 'Tersalin!' : 'Salin Format WA'}</span>
+              <span>Salin Format WA</span>
             </button>
 
             <button
               type="button"
               disabled={loading || !data}
               onClick={handleOpenWhatsApp}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50"
             >
-              <Share2 className="w-4 h-4" />
+              <ExternalLink className="w-4 h-4" />
               <span>Buka di WhatsApp</span>
             </button>
           </div>
@@ -396,4 +492,3 @@ Install JC : ${s.jc.today}`;
     </div>
   );
 }
-
