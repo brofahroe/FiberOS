@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { exportMatrixToExcel } from '@/actions/matrix';
+import { exportMatrixToExcel, updateWorkItemStatus } from '@/actions/matrix';
 import { Download, Search, Filter, Loader2, FileSpreadsheet } from 'lucide-react';
 
 interface ClusterInfo {
@@ -10,6 +10,7 @@ interface ClusterInfo {
 }
 
 interface MatrixRowItem {
+  workItemId: string;
   clusterId: string;
   clusterName: string;
   homePasses: number;
@@ -20,6 +21,7 @@ interface MatrixRowItem {
   totalInstalled: number;
   remaining: number;
   percentage: number;
+  status: string;
   dailyValues: { [dateStr: string]: number };
 }
 
@@ -37,6 +39,18 @@ export default function MatrixClient({
   const [selectedCluster, setSelectedCluster] = useState<string>(initialClusterId || 'ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [exporting, setExporting] = useState<boolean>(false);
+  const [rowStatuses, setRowStatuses] = useState<{ [id: string]: string }>({});
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const handleStatusChange = async (workItemId: string, newStatus: string) => {
+    setRowStatuses((prev) => ({ ...prev, [workItemId]: newStatus }));
+    setUpdatingId(workItemId);
+    const res = await updateWorkItemStatus(workItemId, newStatus);
+    setUpdatingId(null);
+    if (!res.success) {
+      alert(res.error || 'Gagal mengubah status');
+    }
+  };
 
   // Filter rows
   const filteredRows = matrixRows.filter((r) => {
@@ -173,20 +187,24 @@ export default function MatrixClient({
                 <th className="p-3 border-b border-r border-slate-200 text-right min-w-[80px] text-slate-600">
                   SISA
                 </th>
-                <th className="p-3 border-b border-slate-200 text-center min-w-[80px] bg-slate-100 font-bold">
+                <th className="p-3 border-b border-slate-200 text-center min-w-[80px] bg-slate-100 font-bold border-r">
                   PROG %
+                </th>
+                <th className="p-3 border-b border-slate-200 text-center min-w-[130px] bg-slate-100 font-bold sticky right-0 z-30">
+                  STATUS FINAL
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={dates.length + 8} className="p-8 text-center text-slate-400">
+                  <td colSpan={dates.length + 9} className="p-8 text-center text-slate-400">
                     Tidak ada data yang sesuai filter.
                   </td>
                 </tr>
               ) : (
                 filteredRows.map((row, idx) => {
+                  const currentStatus = rowStatuses[row.workItemId] || row.status || 'ONGOING';
                   return (
                     <tr key={idx} className="hover:bg-blue-50/30 transition">
                       <td className="p-2.5 font-bold text-slate-900 border-r border-slate-100 sticky left-0 bg-white">
@@ -223,7 +241,7 @@ export default function MatrixClient({
                       <td className="p-2.5 text-right text-slate-600 border-r border-slate-100">
                         {row.remaining.toLocaleString()}
                       </td>
-                      <td className="p-2.5 text-center">
+                      <td className="p-2.5 text-center border-r border-slate-100">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             row.percentage >= 100
@@ -235,6 +253,24 @@ export default function MatrixClient({
                         >
                           {row.percentage}%
                         </span>
+                      </td>
+                      <td className="p-2 text-center sticky right-0 bg-white shadow-sm">
+                        <select
+                          value={currentStatus}
+                          onChange={(e) => handleStatusChange(row.workItemId, e.target.value)}
+                          disabled={updatingId === row.workItemId}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                            currentStatus === 'DONE'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : currentStatus === 'HOLD'
+                              ? 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                              : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+                          }`}
+                        >
+                          <option value="ONGOING">⚡ ONGOING</option>
+                          <option value="DONE">✓ DONE (Final)</option>
+                          <option value="HOLD">⏸️ HOLD</option>
+                        </select>
                       </td>
                     </tr>
                   );

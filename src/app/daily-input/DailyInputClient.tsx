@@ -37,6 +37,7 @@ interface ItemState {
   boq: number;
   installed: number;
   remaining: number;
+  status: string;
   todayQty: string;
 }
 
@@ -89,7 +90,7 @@ export default function DailyInputClient({
       if (!isMounted) return;
       if (res && res.items) {
         setItems(
-          res.items.map((it) => ({
+          res.items.map((it: any) => ({
             id: it.id,
             category: it.category,
             itemName: it.itemName,
@@ -97,6 +98,7 @@ export default function DailyInputClient({
             boq: it.boq,
             installed: it.installed,
             remaining: it.remaining,
+            status: it.status || 'ONGOING',
             todayQty: '',
           }))
         );
@@ -390,12 +392,28 @@ export default function DailyInputClient({
                       return (
                         <div
                           key={item.id}
-                          className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white hover:bg-slate-50/50 transition"
+                          className={`p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                            item.status === 'DONE'
+                              ? 'bg-slate-50/80 opacity-80'
+                              : 'bg-white hover:bg-slate-50/50'
+                          }`}
                         >
                           <div className="flex-1">
-                            <span className="text-sm font-semibold text-slate-900">
-                              {item.itemName}
-                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-sm font-semibold ${item.status === 'DONE' ? 'text-slate-600 line-through' : 'text-slate-900'}`}>
+                                {item.itemName}
+                              </span>
+                              {item.status === 'DONE' && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                  🔒 DONE (Terkunci)
+                                </span>
+                              )}
+                              {item.status === 'HOLD' && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                  ⏸️ HOLD (Ditunda)
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                               <span>
                                 BOQ: <strong className="text-slate-700">{item.boq}</strong> {item.unit}
@@ -409,6 +427,11 @@ export default function DailyInputClient({
                                 Sisa: <strong className="text-blue-600">{item.remaining}</strong> {item.unit}
                               </span>
                             </div>
+                            {item.status === 'DONE' && (
+                              <p className="text-[11px] text-emerald-700 font-medium mt-1">
+                                ✓ Item telah berstatus final (DONE). Penambahan volume tidak diizinkan.
+                              </p>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2 sm:w-48">
@@ -417,15 +440,18 @@ export default function DailyInputClient({
                                 type="number"
                                 step="any"
                                 min="0"
+                                disabled={item.status === 'DONE'}
                                 value={item.todayQty}
                                 onChange={(e) => handleQtyChange(item.id, e.target.value)}
-                                placeholder="0"
-                                className={`w-full text-right px-3 py-2 border rounded-xl text-sm font-bold text-slate-900 focus:outline-none transition ${
-                                  isExceeding
-                                    ? 'border-amber-400 bg-amber-50 focus:ring-2 focus:ring-amber-400'
+                                placeholder={item.status === 'DONE' ? 'Locked' : '0'}
+                                className={`w-full text-right px-3 py-2 border rounded-xl text-sm font-bold focus:outline-none transition ${
+                                  item.status === 'DONE'
+                                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                    : isExceeding
+                                    ? 'border-amber-400 bg-amber-50 text-slate-900 focus:ring-2 focus:ring-amber-400'
                                     : todayVal > 0
-                                    ? 'border-blue-500 bg-blue-50/40 focus:ring-2 focus:ring-blue-500'
-                                    : 'border-slate-300 bg-slate-50 focus:ring-2 focus:ring-blue-500'
+                                    ? 'border-blue-500 bg-blue-50/40 text-slate-900 focus:ring-2 focus:ring-blue-500'
+                                    : 'border-slate-300 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500'
                                 }`}
                               />
                             </div>

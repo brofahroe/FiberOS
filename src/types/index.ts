@@ -36,6 +36,7 @@ export interface ClusterWithProgress {
     installed: number;
     remaining: number;
     percentage: number;
+    status: string;
   }>;
 }
 
@@ -54,6 +55,7 @@ export interface DailyReportInput {
 }
 
 export interface MatrixRow {
+  workItemId: string;
   clusterName: string;
   homePasses: number | string;
   category: string;
@@ -63,5 +65,6 @@ export interface MatrixRow {
   boq: number;
   remaining: number;
   percentage: number;
+  status: string; // ONGOING, DONE, HOLD
 }
 

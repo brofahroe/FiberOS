@@ -97,6 +97,7 @@ export async function getDashboardData() {
         installed: installed,
         remaining: remaining,
         percentage: percentage,
+        status: item.status || (percentage >= 100 ? 'DONE' : 'ONGOING'),
       };
     });
 

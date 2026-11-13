@@ -23,6 +23,7 @@ export async function getClusterItemsForForm(clusterId: string) {
   const items = cluster.workItems.map((item) => {
     const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
     const remaining = Math.max(0, item.boq - installed);
+    const status = item.status || (remaining === 0 && item.boq > 0 ? 'DONE' : 'ONGOING');
     return {
       id: item.id,
       category: item.category,
@@ -31,6 +32,7 @@ export async function getClusterItemsForForm(clusterId: string) {
       boq: item.boq,
       installed: installed,
       remaining: remaining,
+      status: status,
     };
   });
 
@@ -55,6 +57,21 @@ export async function submitDailyProgress(data: {
   items: Array<{ workItemId: string; quantity: number }>;
 }) {
   try {
+    // Check if any item to submit is already marked as DONE
+    for (const item of data.items) {
+      if (item.quantity > 0) {
+        const workItem = await prisma.workItem.findUnique({
+          where: { id: item.workItemId },
+        });
+        if (workItem && workItem.status === 'DONE') {
+          return {
+            success: false,
+            error: `Item "${workItem.itemName}" sudah berstatus DONE (Final) dan tidak boleh ada penambahan volume lagi.`,
+          };
+        }
+      }
+    }
+
     // Process photos if any
     const savedPhotoPaths: string[] = [];
     if (data.photoBase64List && data.photoBase64List.length > 0) {

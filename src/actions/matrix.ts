@@ -50,6 +50,7 @@ export async function getMatrixData(filterClusterId?: string) {
   });
 
   const matrixRows: Array<{
+    workItemId: string;
     clusterId: string;
     clusterName: string;
     homePasses: number;
@@ -60,6 +61,7 @@ export async function getMatrixData(filterClusterId?: string) {
     totalInstalled: number;
     remaining: number;
     percentage: number;
+    status: string;
     dailyValues: { [dateStr: string]: number };
   }> = [];
 
@@ -77,8 +79,10 @@ export async function getMatrixData(filterClusterId?: string) {
 
       const remaining = Math.max(0, item.boq - totalInstalled);
       const percentage = item.boq > 0 ? Math.min(100, Math.round((totalInstalled / item.boq) * 100)) : (totalInstalled > 0 ? 100 : 0);
+      const itemStatus = item.status || (percentage >= 100 ? 'DONE' : 'ONGOING');
 
       matrixRows.push({
+        workItemId: item.id,
         clusterId: cluster.id,
         clusterName: isFirstClusterRow ? cluster.name : '',
         homePasses: isFirstClusterRow ? cluster.homePasses : 0,
@@ -89,6 +93,7 @@ export async function getMatrixData(filterClusterId?: string) {
         totalInstalled: Math.round(totalInstalled * 10) / 10,
         remaining: Math.round(remaining * 10) / 10,
         percentage,
+        status: itemStatus,
         dailyValues,
       });
 
@@ -119,7 +124,7 @@ export async function getMatrixData(filterClusterId?: string) {
 export async function exportMatrixToExcel(filterClusterId?: string) {
   const { dates, matrixRows } = await getMatrixData(filterClusterId);
 
-  const headerRow1 = ['Cluster', 'HP', 'Item Pekerjaan', 'Satuan', ...dates, 'TOTAL', 'BOQ', 'SISA', 'PROGRESS %'];
+  const headerRow1 = ['Cluster', 'HP', 'Item Pekerjaan', 'Satuan', ...dates, 'TOTAL', 'BOQ', 'SISA', 'PROGRESS %', 'STATUS'];
 
   const rowsData = matrixRows.map((r) => {
     const dailyCells = dates.map((d) => r.dailyValues[d] || '');
@@ -133,6 +138,7 @@ export async function exportMatrixToExcel(filterClusterId?: string) {
       r.boq,
       r.remaining,
       `${r.percentage}%`,
+      r.status,
     ];
   });
 
@@ -149,6 +155,7 @@ export async function exportMatrixToExcel(filterClusterId?: string) {
     { wch: 10 },
     { wch: 10 },
     { wch: 12 },
+    { wch: 12 },
   ];
   ws['!cols'] = colWidths;
 
@@ -160,4 +167,17 @@ export async function exportMatrixToExcel(filterClusterId?: string) {
     filename: `FiberOS_Progres_Harian_${new Date().toISOString().split('T')[0]}.xlsx`,
     base64,
   };
+}
+
+export async function updateWorkItemStatus(workItemId: string, status: string) {
+  try {
+    const updated = await prisma.workItem.update({
+      where: { id: workItemId },
+      data: { status },
+    });
+    return { success: true, status: updated.status };
+  } catch (err: any) {
+    console.error('Error updating status:', err);
+    return { success: false, error: err.message || 'Gagal mengubah status' };
+  }
 }

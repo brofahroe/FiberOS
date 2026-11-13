@@ -41,6 +41,7 @@ model WorkItem {
   itemName     String
   unit         String              @default("pcs")
   boq          Float               @default(0)
+  status       String              @default("ONGOING") // ONGOING, DONE, HOLD
   sortOrder    Int                 @default(0)
   progressList DailyProgressItem[]
   createdAt    DateTime            @default(now())
