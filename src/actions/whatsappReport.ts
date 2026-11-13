@@ -138,7 +138,8 @@ export async function getWhatsAppReportData(
       let boq = 0;
       let actual = 0;
       let today = 0;
-      let anyDone = false;
+      let activeItemsCount = 0;
+      let doneItemsCount = 0;
 
       for (const item of cluster.workItems) {
         const itemScope = item.scope || (item.itemName.toLowerCase().includes('feeder') ? 'SUBFEEDER' : 'CLUSTER');
@@ -151,19 +152,31 @@ export async function getWhatsAppReportData(
         if (categoryMatch(name, cat, sub)) {
           boq += item.boq;
           const isDone = item.status === 'DONE';
-          if (isDone) anyDone = true;
 
+          let itemActual = 0;
           for (const prog of item.progressList) {
-            actual += prog.quantity;
+            itemActual += prog.quantity;
             const pDate = prog.dailyReport.reportDate;
             if (pDate === targetReportDate || normalizeDateStr(pDate) === normalizeDateStr(targetReportDate)) {
               today += prog.quantity;
             }
           }
+          actual += itemActual;
+
+          // Item dihitung aktif jika memiliki BOQ > 0 atau ada fisik aktual
+          if (item.boq > 0 || itemActual > 0) {
+            activeItemsCount++;
+            if (isDone || (item.boq > 0 && itemActual >= item.boq)) {
+              doneItemsCount++;
+            }
+          }
         }
       }
 
-      const isCompleted = anyDone || (boq > 0 && actual >= boq);
+      // Kategori dianggap final DONE hanya jika:
+      // 1. Seluruh item aktif di kategori tersebut sudah berstatus DONE
+      // 2. ATAU total aktual sudah mencapai/melebihi BOQ (dan BOQ > 0)
+      const isCompleted = (activeItemsCount > 0 && doneItemsCount >= activeItemsCount) || (boq > 0 && actual >= boq);
 
       return {
         boq: Math.round(boq * 10) / 10,

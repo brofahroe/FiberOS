@@ -152,13 +152,21 @@ export default function WhatsAppReportModal({
       const boqStr = formatNumber(item.boq);
       const actStr = formatNumber(item.actual);
       
-      let todayStr = formatNumber(item.today);
-      if (item.today > 0) {
-        todayStr = `${todayStr}✅`;
-      } else if (item.isDone || (item.boq > 0 && item.actual >= item.boq)) {
-        todayStr = '✅';
+      let todayStr = '';
+      if (item.isDone) {
+        // Tanda centang ijo (✅) HANYA muncul jika kondisi sudah final = DONE
+        if (item.today > 0) {
+          todayStr = `${formatNumber(item.today)}✅`;
+        } else {
+          todayStr = '✅';
+        }
       } else {
-        todayStr = '0';
+        // Kondisi belum final / masih ONGOING: Jangan ada centang ijo!
+        if (item.today > 0) {
+          todayStr = formatNumber(item.today);
+        } else {
+          todayStr = '0';
+        }
       }
 
       return `${boqStr}/${actStr}/${todayStr}`;
