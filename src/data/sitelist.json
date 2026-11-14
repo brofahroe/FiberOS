@@ -1,0 +1,276 @@
+{
+  "sites": [
+    {
+      "emrSiteCode": "BLA000032",
+      "subfeederId": "SFM07-99-015",
+      "clusterId": "CLRM07-99-015",
+      "clusterName": "KELURAHAN BALUN BLORA",
+      "shortName": "BALUN",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000033",
+      "subfeederId": "SFM07-99-016",
+      "clusterId": "CLRM07-99-016",
+      "clusterName": "KELURAHAN CABEAN BLORA",
+      "shortName": "CABEAN",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000034",
+      "subfeederId": "SFM07-99-017",
+      "clusterId": "CLRM07-99-017",
+      "clusterName": "KELURAHAN CEPU BLORA",
+      "shortName": "CEPU",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000035",
+      "subfeederId": "SFM07-99-018",
+      "clusterId": "CLRM07-99-018",
+      "clusterName": "KELURAHAN GADON BLORA",
+      "shortName": "GADON",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000036",
+      "subfeederId": "SFM07-99-019",
+      "clusterId": "CLRM07-99-019",
+      "clusterName": "KELURAHAN GETAS BLORA",
+      "shortName": "GETAS",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000037",
+      "subfeederId": "SFM07-99-020",
+      "clusterId": "CLRM07-99-020",
+      "clusterName": "KELURAHAN JIPANG BLORA",
+      "shortName": "JIPANG",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000038",
+      "subfeederId": "SFM07-99-021",
+      "clusterId": "CLRM07-99-021",
+      "clusterName": "KELURAHAN KAPUAN BLORA",
+      "shortName": "KAPUAN",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000039",
+      "subfeederId": "SFM07-99-022",
+      "clusterId": "CLRM07-99-022",
+      "clusterName": "KELURAHAN KARANGBOYO BLORA",
+      "shortName": "KARANGBOYO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000040",
+      "subfeederId": "SFM07-99-023",
+      "clusterId": "CLRM07-99-023",
+      "clusterName": "KELURAHAN KENTONG BLORA",
+      "shortName": "KENTONG",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000041",
+      "subfeederId": "SFM07-99-024",
+      "clusterId": "CLRM07-99-024",
+      "clusterName": "KELURAHAN MERNUNG BLORA",
+      "shortName": "MERNUNG",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000042",
+      "subfeederId": "SFM07-99-025",
+      "clusterId": "CLRM07-99-025",
+      "clusterName": "KELURAHAN MULYOREJO BLORA",
+      "shortName": "MULYOREJO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000043",
+      "subfeederId": "SFM07-99-026",
+      "clusterId": "CLRM07-99-026",
+      "clusterName": "KELURAHAN NGELO BLORA",
+      "shortName": "NGELO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000044",
+      "subfeederId": "SFM07-99-027",
+      "clusterId": "CLRM07-99-027",
+      "clusterName": "KELURAHAN NGLANJUK BLORA",
+      "shortName": "NGLANJUK",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000045",
+      "subfeederId": "SFM07-99-028",
+      "clusterId": "CLRM07-99-028",
+      "clusterName": "KELURAHAN NGLORAM BLORA",
+      "shortName": "NGLORAM",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000046",
+      "subfeederId": "SFM07-99-029",
+      "clusterId": "CLRM07-99-029",
+      "clusterName": "KELURAHAN NGROTO BLORA",
+      "shortName": "NGROTO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000047",
+      "subfeederId": "SFM07-99-030",
+      "clusterId": "CLRM07-99-030",
+      "clusterName": "KELURAHAN SUMBERPITU BLORA",
+      "shortName": "SUMBERPITU",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000048",
+      "subfeederId": "SFM07-99-031",
+      "clusterId": "CLRM07-99-031",
+      "clusterName": "KELURAHAN TAMBAKROMO BLORA",
+      "shortName": "TAMBAKROMO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000172",
+      "subfeederId": "SFM07-99-063",
+      "clusterId": "CLRM07-99-063",
+      "clusterName": "KELURAHAN KALEN BLORA",
+      "shortName": "KALEN",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000175",
+      "subfeederId": "SFM07-99-066",
+      "clusterId": "CLRM07-99-066",
+      "clusterName": "KELURAHAN NGLANDEYAN BLORA",
+      "shortName": "NGLANDEYAN",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000177",
+      "subfeederId": "SFM07-99-068",
+      "clusterId": "CLRM07-99-068",
+      "clusterName": "KELURAHAN BAJO BLORA",
+      "shortName": "BAJO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000181",
+      "subfeederId": "SFM07-99-072",
+      "clusterId": "CLRM07-99-072",
+      "clusterName": "KELURAHAN GONDEL BLORA",
+      "shortName": "GONDEL",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000182",
+      "subfeederId": "SFM07-99-073",
+      "clusterId": "CLRM07-99-073",
+      "clusterName": "KELURAHAN PANOLAN BLORA",
+      "shortName": "PANOLAN",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000183",
+      "subfeederId": "SFM07-99-074",
+      "clusterId": "CLRM07-99-074",
+      "clusterName": "KELURAHAN JIMBUNG BLORA",
+      "shortName": "JIMBUNG",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000185",
+      "subfeederId": "SFM07-99-076",
+      "clusterId": "CLRM07-99-076",
+      "clusterName": "KELURAHAN KEDUNGTUBAN BLORA",
+      "shortName": "KEDUNGTUBAN",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000186",
+      "subfeederId": "SFM07-99-077",
+      "clusterId": "CLRM07-99-077",
+      "clusterName": "KELURAHAN KEMANTREN BLORA",
+      "shortName": "KEMANTREN",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000187",
+      "subfeederId": "SFM07-99-078",
+      "clusterId": "CLRM07-99-078",
+      "clusterName": "KELURAHAN KLAGEN BLORA",
+      "shortName": "KLAGEN",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000190",
+      "subfeederId": "SFM07-99-081",
+      "clusterId": "CLRM07-99-081",
+      "clusterName": "KELURAHAN NGRAHO BLORA",
+      "shortName": "NGRAHO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000192",
+      "subfeederId": "SFM07-99-083",
+      "clusterId": "CLRM07-99-083",
+      "clusterName": "KELURAHAN PULO BLORA",
+      "shortName": "PULO",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000193",
+      "subfeederId": "SFM07-99-084",
+      "clusterId": "CLRM07-99-084",
+      "clusterName": "KELURAHAN SIDAREJO BLORA",
+      "shortName": "SIDAREJO",
+      "oltName": "OLT Balun"
+    },
+    {
+      "emrSiteCode": "BLA000194",
+      "subfeederId": "SFM07-99-085",
+      "clusterId": "CLRM07-99-085",
+      "clusterName": "KELURAHAN SOGO BLORA",
+      "shortName": "SOGO",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000196",
+      "subfeederId": "SFM07-99-087",
+      "clusterId": "CLRM07-99-087",
+      "clusterName": "KELURAHAN TANJUNG BLORA",
+      "shortName": "TANJUNG",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000198",
+      "subfeederId": "SFM07-99-089",
+      "clusterId": "CLRM07-99-089",
+      "clusterName": "KELURAHAN WADO BLORA",
+      "shortName": "WADO",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000228",
+      "subfeederId": "SFM07-99-092",
+      "clusterId": "CLRM07-99-092",
+      "clusterName": "KELURAHAN KETUWAN KEDUNGTUBAN BLORA",
+      "shortName": "KETUWAN",
+      "oltName": "OLT Kedungtuban"
+    },
+    {
+      "emrSiteCode": "BLA000171",
+      "subfeederId": "SFM07-99-107",
+      "clusterId": "CLRM07-99-107",
+      "clusterName": "KELURAHAN GALUK BLORA",
+      "shortName": "GALUK",
+      "oltName": "OLT Kedungtuban"
+    }
+  ]
+}

@@ -12,7 +12,6 @@ import {
   Settings2, 
   ChevronDown, 
   ChevronUp,
-  Share2,
   Building2,
   Calendar,
   RotateCcw,
@@ -31,7 +30,6 @@ export default function WhatsAppReportModal({
   onClose,
   clusterId,
   reportDate,
-  clusterName: initialClusterName,
 }: WhatsAppReportModalProps) {
   const [selectedClusterId, setSelectedClusterId] = useState<string>(clusterId);
   const [selectedReportDate, setSelectedReportDate] = useState<string>(reportDate);

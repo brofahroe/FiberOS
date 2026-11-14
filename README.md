@@ -15,6 +15,7 @@ Aplikasi modern untuk monitoring, pelaporan progres harian, dan manajemen BOQ pr
 2. **Form Input Harian Mobile-First (`/daily-input`)**
    - Dirancang khusus untuk kemudahan input teknisi / supervisor di lapangan via smartphone.
    - Pilih Cluster & Tanggal -> Otomatis menampilkan item pekerjaan, target BOQ, terpasang sebelumnya, dan sisa volume.
+   - Laporan dibedakan per tim untuk cluster dan tanggal yang sama; ringkasan progres, Matriks, Excel, dan WhatsApp tetap digabung per cluster.
    - Validasi angka real-time (peringatan jika input melebihi sisa BOQ).
    - Catatan kendala lapangan (cuaca hujan, izin warga, kendala jalur PLN).
    - **Kompresi Foto Otomatis:** Foto kamera HP langsung dikompres di browser sebelum diunggah sehingga hemat kuota dan cepat walau sinyal minim.
@@ -23,6 +24,7 @@ Aplikasi modern untuk monitoring, pelaporan progres harian, dan manajemen BOQ pr
    - Tampilan tabel matriks pivot (Cluster x HP x Item x Tanggal harian x Total x BOQ x Sisa x %).
    - Filter cepat berdasarkan cluster atau pencarian item.
    - **Tombol 1-Klik "Export to Excel (.xlsx)":** Menghasilkan file spreadsheet persis seperti Google Spreadsheet resmi proyek.
+   - Koreksi sel harian dinonaktifkan jika pada cluster dan tanggal tersebut ada laporan dari beberapa tim.
 
 4. **Menu Impor BOQ (`/import-boq`)**
    - Unggah langsung file Excel resmi format APD (`*_BOQ_APD(CLUSTER).xlsx` dan `*_BOQ_APD(SUBFEEDER).xlsx`).
@@ -37,6 +39,12 @@ Aplikasi modern untuk monitoring, pelaporan progres harian, dan manajemen BOQ pr
 ## 🛠️ Cara Menjalankan Aplikasi
 
 ### 1. Menjalankan di Komputer Lokal
+Jalankan ESLint untuk memeriksa kode:
+```bash
+npm run lint
+```
+
+Jalankan aplikasi:
 ```bash
 npm run dev
 ```

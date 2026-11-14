@@ -9,11 +9,9 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Loader2, 
-  Layers, 
   Check, 
   FileText,
-  Save,
-  ArrowRight
+  Save
 } from 'lucide-react';
 
 export default function ImportBoqClient() {

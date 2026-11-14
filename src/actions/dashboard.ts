@@ -184,23 +184,12 @@ export async function getDashboardData() {
     totalInstalled: Math.round(totalInstalled),
   };
 
-  // Recent daily reports
-  const recentReports = await prisma.dailyReport.findMany({
-    take: 10,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      cluster: true,
-      items: {
-        include: {
-          workItem: true,
-        },
-      },
-    },
-  });
-
   // Calculate daily installation trends (poles and cables per date)
   const allDailyReports = await prisma.dailyReport.findMany({
     include: {
+      cluster: {
+        select: { id: true, name: true },
+      },
       items: {
         include: {
           workItem: true,
@@ -209,6 +198,49 @@ export async function getDashboardData() {
     },
     orderBy: { reportDate: 'asc' },
   });
+
+  const activityByClusterDate = new Map<
+    string,
+    {
+      clusterId: string;
+      cluster: { id: string; name: string };
+      reportDate: string;
+      createdAt: Date;
+      itemIds: Set<string>;
+    }
+  >();
+
+  for (const report of allDailyReports) {
+    const key = `${report.clusterId}:${report.reportDate}`;
+    let activity = activityByClusterDate.get(key);
+    if (!activity) {
+      activity = {
+        clusterId: report.clusterId,
+        cluster: report.cluster,
+        reportDate: report.reportDate,
+        createdAt: report.createdAt,
+        itemIds: new Set<string>(),
+      };
+      activityByClusterDate.set(key, activity);
+    } else if (report.createdAt > activity.createdAt) {
+      activity.createdAt = report.createdAt;
+    }
+
+    for (const item of report.items) {
+      activity.itemIds.add(item.workItemId);
+    }
+  }
+
+  const recentReports = Array.from(activityByClusterDate.values())
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 10)
+    .map((activity) => ({
+      id: `${activity.clusterId}-${activity.reportDate}`,
+      clusterId: activity.clusterId,
+      cluster: activity.cluster,
+      reportDate: activity.reportDate,
+      items: Array.from(activity.itemIds, (workItemId) => ({ workItemId })),
+    }));
 
   const dateMap = new Map<string, { date: string; pole: number; cable: number; fat: number }>();
   for (const rep of allDailyReports) {

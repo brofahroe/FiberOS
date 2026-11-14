@@ -2,8 +2,6 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import fs from 'fs';
-import path from 'path';
 import { uploadFileToNextcloud } from '@/lib/nextcloud';
 
 export async function getClusterItemsForForm(clusterId: string) {
@@ -62,6 +60,11 @@ export async function submitDailyProgress(data: {
   photoBase64List?: string[];
   items: Array<{ workItemId: string; quantity: number }>;
 }) {
+  const teamName = typeof data.teamName === 'string' ? data.teamName.trim() : '';
+  if (!teamName) {
+    return { success: false, error: 'Nama Tim Pelaksana wajib diisi.' };
+  }
+
   try {
     // Check if any item to submit is already marked as DONE
     for (const item of data.items) {
@@ -123,10 +126,13 @@ export async function submitDailyProgress(data: {
     }
 
     // Find if report already exists for this cluster and date
-    let report = await prisma.dailyReport.findFirst({
+    let report = await prisma.dailyReport.findUnique({
       where: {
-        clusterId: data.clusterId,
-        reportDate: data.reportDate,
+        clusterId_reportDate_teamName: {
+          clusterId: data.clusterId,
+          reportDate: data.reportDate,
+          teamName,
+        },
       },
     });
 
@@ -136,7 +142,7 @@ export async function submitDailyProgress(data: {
         where: { id: report.id },
         data: {
           reporterName: data.reporterName || report.reporterName,
-          teamName: data.teamName || report.teamName,
+          teamName,
           weather: data.weather || report.weather,
           notes: data.notes ? `${report.notes ? report.notes + ' | ' : ''}${data.notes}` : report.notes,
           photos: savedPhotoPaths.length > 0 
@@ -151,7 +157,7 @@ export async function submitDailyProgress(data: {
           clusterId: data.clusterId,
           reportDate: data.reportDate,
           reporterName: data.reporterName,
-          teamName: data.teamName,
+          teamName,
           weather: data.weather,
           notes: data.notes,
           photos: savedPhotoPaths.length > 0 ? JSON.stringify(savedPhotoPaths) : null,
@@ -200,12 +206,41 @@ export async function submitDailyProgress(data: {
   }
 }
 
-export async function getExistingDailyReport(clusterId: string, reportDate: string) {
+export async function getDailyReportTeams(clusterId: string, reportDate: string) {
   try {
-    const report = await prisma.dailyReport.findFirst({
+    const reports = await prisma.dailyReport.findMany({
+      where: { clusterId, reportDate, teamName: { not: null } },
+      select: { teamName: true },
+      distinct: ['teamName'],
+      orderBy: { teamName: 'asc' },
+    });
+
+    return {
+      success: true,
+      teams: Array.from(new Set(
+        reports
+          .map((report) => report.teamName?.trim() || '')
+          .filter((name) => name.length > 0)
+      )),
+    };
+  } catch (error: any) {
+    console.error('Error fetching report teams:', error);
+    return { success: false, teams: [], error: error.message || 'Gagal memuat daftar tim.' };
+  }
+}
+
+export async function getExistingDailyReport(clusterId: string, reportDate: string, teamName: string) {
+  try {
+    const normalizedTeamName = teamName.trim();
+    if (!normalizedTeamName) return { exists: false, report: null };
+
+    const report = await prisma.dailyReport.findUnique({
       where: {
-        clusterId,
-        reportDate,
+        clusterId_reportDate_teamName: {
+          clusterId,
+          reportDate,
+          teamName: normalizedTeamName,
+        },
       },
       include: {
         items: true,
@@ -219,7 +254,7 @@ export async function getExistingDailyReport(clusterId: string, reportDate: stri
       report: {
         id: report.id,
         reporterName: report.reporterName || '',
-        teamName: report.teamName || '',
+        teamName: report.teamName || normalizedTeamName,
         weather: report.weather || 'Cerah',
         notes: report.notes || '',
         photos: report.photos ? JSON.parse(report.photos) : [],
@@ -242,6 +277,22 @@ export async function updateDailyCellProgress(
   newQuantity: number
 ) {
   try {
+    const reportsForDate = await prisma.dailyReport.findMany({
+      where: { clusterId, reportDate },
+      select: { teamName: true },
+    });
+    const teams = new Set(
+      reportsForDate
+        .map((report) => report.teamName?.trim() || '')
+        .filter(Boolean)
+    );
+    if (teams.size > 1) {
+      return {
+        success: false,
+        error: 'Koreksi Matriks dinonaktifkan karena tanggal ini memiliki laporan dari beberapa tim.',
+      };
+    }
+
     // 1. Find or create DailyReport for this cluster and date
     let report = await prisma.dailyReport.findFirst({
       where: {
@@ -301,12 +352,20 @@ export async function updateDailyCellProgress(
   }
 }
 
-export async function deleteDailyReportByDate(clusterId: string, reportDate: string) {
+export async function deleteDailyReportByDate(clusterId: string, reportDate: string, teamName: string) {
   try {
-    const report = await prisma.dailyReport.findFirst({
+    const normalizedTeamName = teamName.trim();
+    if (!normalizedTeamName) {
+      return { success: false, error: 'Nama Tim Pelaksana wajib diisi untuk menghapus laporan.' };
+    }
+
+    const report = await prisma.dailyReport.findUnique({
       where: {
-        clusterId,
-        reportDate,
+        clusterId_reportDate_teamName: {
+          clusterId,
+          reportDate,
+          teamName: normalizedTeamName,
+        },
       },
     });
 

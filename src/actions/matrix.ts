@@ -26,12 +26,11 @@ export async function getMatrixData(filterClusterId?: string) {
       orderBy: { name: 'asc' },
     });
 
-  const reports = await prisma.dailyReport.findMany({
-    select: { reportDate: true },
-    distinct: ['reportDate'],
+  const reportSummaries = await prisma.dailyReport.findMany({
+    select: { clusterId: true, reportDate: true, teamName: true },
   });
 
-  const dates = reports.map((r) => r.reportDate).sort((a, b) => {
+  const dates = Array.from(new Set(reportSummaries.map((report) => report.reportDate))).sort((a, b) => {
     const parseDate = (d: string) => {
       const parts = d.split('-');
       if (parts.length === 3 && isNaN(Number(parts[1]))) {
@@ -47,6 +46,27 @@ export async function getMatrixData(filterClusterId?: string) {
       return new Date(d).getTime();
     };
     return parseDate(a) - parseDate(b);
+  });
+
+  const teamsByClusterDate = new Map<string, Set<string>>();
+  for (const report of reportSummaries) {
+    const team = report.teamName?.trim() || '';
+    if (!team) continue;
+
+    const key = `${report.clusterId}:${report.reportDate}`;
+    const teams = teamsByClusterDate.get(key) || new Set<string>();
+    teams.add(team);
+    teamsByClusterDate.set(key, teams);
+  }
+
+  const multiTeamDatesByCluster = new Map<string, string[]>();
+  teamsByClusterDate.forEach((teams, key) => {
+    if (teams.size < 2) return;
+
+    const [clusterId, reportDate] = key.split(':');
+    const clusterDates = multiTeamDatesByCluster.get(clusterId) || [];
+    clusterDates.push(reportDate);
+    multiTeamDatesByCluster.set(clusterId, clusterDates);
   });
 
   const matrixRows: Array<{
@@ -67,6 +87,7 @@ export async function getMatrixData(filterClusterId?: string) {
     percentage: number;
     status: string;
     dailyValues: { [dateStr: string]: number };
+    multiTeamDates: string[];
   }> = [];
 
   for (const cluster of clusters) {
@@ -106,6 +127,7 @@ export async function getMatrixData(filterClusterId?: string) {
         percentage,
         status: itemStatus,
         dailyValues,
+        multiTeamDates: multiTeamDatesByCluster.get(cluster.id) || [],
       });
 
       isFirstClusterRow = false;

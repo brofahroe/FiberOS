@@ -48,9 +48,6 @@ export default async function ClustersPage() {
 
       <div className="space-y-6">
         {clusters.map((cluster: any) => {
-          let totalBoq = 0;
-          let totalInstalled = 0;
-
           const calcInput = (cluster.workItems || []).map((it: any) => {
             const installed = (it.progressList || []).reduce((sum: number, p: any) => sum + p.quantity, 0);
             return {
@@ -75,8 +72,6 @@ export default async function ClustersPage() {
             const percentage = isDone
               ? 100
               : (it.boq > 0 ? Math.min(100, Math.round((installed / it.boq) * 100)) : 0);
-            totalBoq += it.boq;
-            totalInstalled += isDone ? Math.max(installed, it.boq) : installed;
             return {
               ...it,
               installed,

@@ -123,13 +123,6 @@ export async function getWhatsAppReportData(
       return { success: false, error: 'Cluster tidak ditemukan.' };
     }
 
-    const report = await prisma.dailyReport.findFirst({
-      where: {
-        clusterId: targetClusterId,
-        reportDate: targetReportDate,
-      },
-    });
-
     // Helper to calculate metric for items matching filter
     const calcMetrics = (
       scope: 'CLUSTER' | 'SUBFEEDER',
@@ -209,8 +202,8 @@ export async function getWhatsAppReportData(
         reportDate: targetReportDate,
         formattedDate: formatIndoDate(targetReportDate),
         startImDate: '01/11/26',
-        reporterName: report?.reporterName || '',
-        teamName: report?.teamName || '',
+        reporterName: '',
+        teamName: '',
         availableClusters: allClusters,
         availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
         distribusi: {

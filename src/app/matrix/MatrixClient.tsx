@@ -13,7 +13,6 @@ import {
   Trash2,
   X,
   Check,
-  AlertCircle,
   MessageSquare,
   ChevronLeft,
   ChevronRight,
@@ -46,6 +45,7 @@ interface MatrixRowItem {
   percentage: number;
   status: string;
   dailyValues: { [dateStr: string]: number };
+  multiTeamDates: string[];
 }
 
 interface EditingCellState {
@@ -357,7 +357,7 @@ export default function MatrixClient({
       {/* Tip Banner */}
       <div className="flex items-center gap-2 text-xs text-slate-600 bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-xl">
         <span className="text-blue-700 font-bold">💡 Fitur Koreksi:</span>
-        <span>Jika ada salah input atau salah tanggal, cukup <strong>klik angka pada kolom tanggal</strong> di tabel untuk langsung mengedit nilai volume atau menghapusnya.</span>
+        <span>Klik angka pada kolom tanggal untuk mengoreksi volume. Koreksi dinonaktifkan pada cluster/tanggal yang memiliki beberapa tim.</span>
       </div>
 
       {/* The Matrix Table Card */}
@@ -619,13 +619,20 @@ export default function MatrixClient({
                       {/* Date Cells */}
                       {dates.map((dateStr) => {
                         const val = row.dailyValues[dateStr];
+                        const hasMultipleTeams = row.multiTeamDates.includes(dateStr);
                         return (
                           <td
                             key={dateStr}
-                            onClick={() => handleOpenEditCell(row, dateStr)}
-                            title="Klik untuk mengoreksi volume atau menghapus salah input"
-                            className={`p-2 text-center border-r border-slate-100 cursor-pointer transition hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 select-none group min-w-[65px] ${
-                              val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
+                            onClick={hasMultipleTeams ? undefined : () => handleOpenEditCell(row, dateStr)}
+                            title={hasMultipleTeams
+                              ? 'Koreksi dinonaktifkan: tanggal ini memiliki laporan dari beberapa tim.'
+                              : 'Klik untuk mengoreksi volume atau menghapus salah input'}
+                            className={`p-2 text-center border-r border-slate-100 transition select-none group min-w-[65px] ${
+                              hasMultipleTeams
+                                ? 'cursor-not-allowed bg-slate-50 text-slate-400'
+                                : `cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 ${
+                                    val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
+                                  }`
                             }`}
                           >
                             <span className="inline-block px-1 rounded">

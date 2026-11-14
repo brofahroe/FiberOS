@@ -65,6 +65,7 @@ model DailyReport {
   updatedAt    DateTime            @updatedAt
 
   @@index([clusterId, reportDate])
+  @@unique([clusterId, reportDate, teamName])
 }
 
 model DailyProgressItem {

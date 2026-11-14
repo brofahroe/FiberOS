@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getClusterItemsForForm, submitDailyProgress, getExistingDailyReport, deleteDailyReportByDate } from '@/actions/dailyProgress';
+import { getClusterItemsForForm, submitDailyProgress, getDailyReportTeams, getExistingDailyReport, deleteDailyReportByDate } from '@/actions/dailyProgress';
 import { compressImage } from '@/lib/imageCompression';
 import { 
   Building2, 
@@ -20,17 +20,27 @@ import {
   Cpu, 
   Layers,
   X,
-  CloudSun,
   Trash2,
   Edit3,
   MessageSquare
 } from 'lucide-react';
 import WhatsAppReportModal from '@/components/WhatsAppReportModal';
+import { SearchableDropdown } from '@/components/SearchableDropdown/SearchableDropdown';
+import sitelistData from '@/data/sitelist.json';
 
 interface ClusterOption {
   id: string;
   name: string;
   homePasses: number;
+}
+
+interface SiteOption {
+  emrSiteCode: string;
+  subfeederId: string;
+  clusterId: string;
+  clusterName: string;
+  shortName: string;
+  oltName: string;
 }
 
 interface ItemState {
@@ -70,8 +80,46 @@ export default function DailyInputClient({
   });
   const [reporterName, setReporterName] = useState<string>('');
   const [teamName, setTeamName] = useState<string>('');
+  const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+  const [teamListError, setTeamListError] = useState<string | null>(null);
   const [weather, setWeather] = useState<string>('Cerah');
   const [notes, setNotes] = useState<string>('');
+
+  // Sitelist dropdown state
+  const sitelistOptions: SiteOption[] = sitelistData.sites;
+  const [selectedSitelistOption, setSelectedSitelistOption] = useState<SiteOption | null>(null);
+
+  // Map sitelist clusterName to database cluster id
+  const clusterMap = useMemo(() => {
+    const map = new Map<string, ClusterOption>();
+    clusters.forEach((c) => map.set(c.name.toLowerCase(), c));
+    return map;
+  }, [clusters]);
+
+  const resolveSelectedClusterId = useCallback((opt: SiteOption | null): string => {
+    if (!opt) return '';
+    const dbCluster = clusterMap.get(opt.clusterName.toLowerCase());
+    return dbCluster ? dbCluster.id : opt.clusterId;
+  }, [clusterMap]);
+
+  // Initialize sitelist selection from initialClusterId
+  useEffect(() => {
+    if (initialClusterId) {
+      const dbCluster = clusters.find((c) => c.id === initialClusterId);
+      if (dbCluster) {
+        const sitelistOpt = sitelistOptions.find((s) => s.clusterName.toLowerCase() === dbCluster.name.toLowerCase());
+        setSelectedSitelistOption(sitelistOpt || null);
+      }
+    } else if (clusters[0] && !selectedSitelistOption) {
+      const sitelistOpt = sitelistOptions.find((s) => s.clusterName.toLowerCase() === clusters[0]!.name.toLowerCase());
+      setSelectedSitelistOption(sitelistOpt || null);
+    }
+  }, [initialClusterId, clusters, sitelistOptions, selectedSitelistOption]);
+
+  // Sync sitelist selection to selectedClusterId
+  useEffect(() => {
+    setSelectedClusterId(resolveSelectedClusterId(selectedSitelistOption));
+  }, [selectedSitelistOption, resolveSelectedClusterId]);
 
   // Items and photos
   const [items, setItems] = useState<ItemState[]>([]);
@@ -85,6 +133,7 @@ export default function DailyInputClient({
   // Edit / correction mode state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [checkingReport, setCheckingReport] = useState<boolean>(false);
+  const [reportLookupError, setReportLookupError] = useState<string | null>(null);
   const [deletingReport, setDeletingReport] = useState<boolean>(false);
   const [showWaModal, setShowWaModal] = useState<boolean>(false);
 
@@ -133,24 +182,76 @@ export default function DailyInputClient({
     };
   }, [selectedClusterId]);
 
-  // Check if report already exists for selectedClusterId and reportDate
+  // Load team names already reported for the selected cluster and date
   useEffect(() => {
-    if (!selectedClusterId || !reportDate) return;
+    if (!selectedClusterId || !reportDate.trim()) {
+      setAvailableTeams([]);
+      setTeamListError(null);
+      return;
+    }
+
+    let isMounted = true;
+    setAvailableTeams([]);
+    setTeamListError(null);
+    getDailyReportTeams(selectedClusterId, reportDate.trim()).then((res) => {
+      if (!isMounted) return;
+      if (res.success) {
+        setAvailableTeams(res.teams);
+      } else {
+        setTeamListError(res.error || 'Gagal memuat daftar tim.');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedClusterId, reportDate]);
+
+  // Check if a report already exists for the selected cluster, date, and team
+  useEffect(() => {
+    if (loadingItems) {
+      setCheckingReport(true);
+      return;
+    }
+
+    if (!selectedClusterId || !reportDate.trim() || !teamName.trim()) {
+      setCheckingReport(false);
+      setReportLookupError(null);
+      setMessage(null);
+      setIsEditMode(false);
+      setItems((prev) => prev.map((it) => ({ ...it, todayQty: '' })));
+      setPhotos([]);
+      setNotes('');
+      return;
+    }
 
     let isMounted = true;
     setCheckingReport(true);
+    setReportLookupError(null);
+    setMessage(null);
+    setIsEditMode(false);
+    setWeather('Cerah');
+    setNotes('');
+    setPhotos([]);
+    setItems((prev) => prev.map((it) => ({ ...it, todayQty: '' })));
 
-    getExistingDailyReport(selectedClusterId, reportDate.trim()).then((res) => {
+    getExistingDailyReport(selectedClusterId, reportDate.trim(), teamName.trim()).then((res) => {
       if (!isMounted) return;
       setCheckingReport(false);
 
+      if ('error' in res && res.error) {
+        setReportLookupError(res.error);
+        setMessage({ type: 'error', text: res.error });
+        return;
+      }
+
       if (res && res.exists && res.report) {
         setIsEditMode(true);
-        if (res.report.reporterName) setReporterName(res.report.reporterName);
-        if (res.report.teamName) setTeamName(res.report.teamName);
-        if (res.report.weather) setWeather(res.report.weather);
-        if (res.report.notes) setNotes(res.report.notes);
-        if (res.report.photos && res.report.photos.length > 0) setPhotos(res.report.photos);
+        setReporterName(res.report.reporterName);
+        setTeamName(res.report.teamName);
+        setWeather(res.report.weather);
+        setNotes(res.report.notes);
+        setPhotos(res.report.photos);
 
         const qtyMap = new Map<string, number>();
         res.report.items.forEach((it: any) => qtyMap.set(it.workItemId, it.quantity));
@@ -172,21 +273,22 @@ export default function DailyInputClient({
     return () => {
       isMounted = false;
     };
-  }, [selectedClusterId, reportDate]);
+  }, [selectedClusterId, reportDate, teamName, loadingItems]);
 
   const handleDeleteReport = async () => {
     const clusterName = clusters.find((c) => c.id === selectedClusterId)?.name || 'Cluster';
-    if (!confirm(`Yakin ingin menghapus seluruh laporan progres untuk cluster "${clusterName}" pada tanggal "${reportDate}"?`)) {
+    if (!confirm(`Yakin ingin menghapus laporan progres tim "${teamName}" untuk cluster "${clusterName}" pada tanggal "${reportDate}"?`)) {
       return;
     }
 
     setDeletingReport(true);
-    const res = await deleteDailyReportByDate(selectedClusterId, reportDate.trim());
+    const res = await deleteDailyReportByDate(selectedClusterId, reportDate.trim(), teamName.trim());
     setDeletingReport(false);
 
     if (res.success) {
       setMessage({ type: 'success', text: res.message || 'Laporan berhasil dihapus.' });
       setIsEditMode(false);
+      setAvailableTeams((prev) => prev.filter((team) => team !== teamName.trim()));
       setItems((prev) => prev.map((it) => ({ ...it, todayQty: '' })));
       setNotes('');
       setPhotos([]);
@@ -234,13 +336,21 @@ export default function DailyInputClient({
       setMessage({ type: 'error', text: 'Pilih cluster terlebih dahulu.' });
       return;
     }
+    if (!teamName.trim()) {
+      setMessage({ type: 'error', text: 'Nama Tim Pelaksana wajib diisi.' });
+      return;
+    }
+    if (reportLookupError) {
+      setMessage({ type: 'error', text: reportLookupError });
+      return;
+    }
 
     // Filter items that have quantity > 0
     const itemsToSubmit = items
-      .filter((it) => parseFloat(it.todayQty) > 0)
+      .filter((it) => isEditMode || parseFloat(it.todayQty) > 0)
       .map((it) => ({
         workItemId: it.id,
-        quantity: parseFloat(it.todayQty),
+        quantity: parseFloat(it.todayQty) || 0,
       }));
 
     if (itemsToSubmit.length === 0 && !notes && photos.length === 0) {
@@ -254,7 +364,7 @@ export default function DailyInputClient({
     // Save reporter to localStorage
     if (typeof window !== 'undefined') {
       if (reporterName) localStorage.setItem('fiberos_reporter', reporterName);
-      if (teamName) localStorage.setItem('fiberos_team', teamName);
+      if (teamName.trim()) localStorage.setItem('fiberos_team', teamName.trim());
     }
 
     const res = await submitDailyProgress({
@@ -363,18 +473,14 @@ export default function DailyInputClient({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Pilih Cluster <span className="text-rose-500">*</span>
             </label>
-            <select
-              value={selectedClusterId}
-              onChange={(e) => setSelectedClusterId(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            <SearchableDropdown
+              options={sitelistOptions}
+              value={selectedSitelistOption}
+              onChange={setSelectedSitelistOption}
+              label="Pilih Cluster"
               required
-            >
-              {clusters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} {c.homePasses ? `(${c.homePasses} HP)` : ''}
-                </option>
-              ))}
-            </select>
+              placeholder="Ketik nama cluster..."
+            />
           </div>
 
           {/* Report Date */}
@@ -415,7 +521,7 @@ export default function DailyInputClient({
           {/* Team / Vendor Name */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Tim Pelaksana / Vendor
+              Tim Pelaksana / Vendor <span className="text-rose-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -423,10 +529,25 @@ export default function DailyInputClient({
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 placeholder="Contoh: Tim Tarik Kabel 1"
+                list="daily-report-teams"
+                required
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
               />
               <Users className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+              <datalist id="daily-report-teams">
+                {availableTeams.map((team) => (
+                  <option key={team} value={team} />
+                ))}
+              </datalist>
             </div>
+            {availableTeams.length > 0 && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Pilih tim yang sudah ada untuk mengoreksi laporannya, atau masukkan nama tim baru.
+              </p>
+            )}
+            {teamListError && (
+              <p className="mt-1 text-[11px] text-rose-600">{teamListError}</p>
+            )}
           </div>
 
           {/* Weather */}
@@ -457,7 +578,7 @@ export default function DailyInputClient({
         {checkingReport && (
           <div className="flex items-center gap-2 text-xs text-blue-600 font-medium py-1">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span>Memeriksa riwayat laporan pada tanggal ini...</span>
+            <span>Memeriksa laporan cluster, tanggal, dan tim...</span>
           </div>
         )}
 
@@ -470,7 +591,7 @@ export default function DailyInputClient({
                   Mode Koreksi / Edit Laporan Aktif
                 </span>
                 <p className="text-[11px] text-amber-800 mt-0.5">
-                  Ditemukan laporan tersimpan untuk tanggal <strong>{reportDate}</strong>. Anda dapat mengoreksi volume pekerjaan di bawah, atau menghapus seluruh laporan jika terjadi salah input.
+                  Ditemukan laporan tim <strong>{teamName}</strong> untuk tanggal <strong>{reportDate}</strong>. Anda dapat mengoreksi volume pekerjaan di bawah, atau menghapus laporan tim ini.
                 </p>
               </div>
             </div>
@@ -748,7 +869,7 @@ export default function DailyInputClient({
 
         <button
           type="submit"
-          disabled={submitting || compressing}
+          disabled={submitting || compressing || checkingReport || Boolean(reportLookupError)}
           className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition transform active:scale-95 disabled:opacity-50"
         >
           {submitting ? (
