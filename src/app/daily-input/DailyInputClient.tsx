@@ -85,40 +85,91 @@ export default function DailyInputClient({
   const [weather, setWeather] = useState<string>('Cerah');
   const [notes, setNotes] = useState<string>('');
 
-  // Sitelist dropdown state
-  const sitelistOptions: SiteOption[] = sitelistData.sites;
+  // Sitelist dropdown state (merge official sitelist with any custom DB clusters)
+  const sitelistOptions: SiteOption[] = useMemo(() => {
+    const baseSites: SiteOption[] = [...sitelistData.sites];
+    for (const c of clusters) {
+      const lower = c.name.trim().toLowerCase();
+      const exists = baseSites.some(
+        (s) =>
+          s.shortName.toLowerCase() === lower ||
+          s.clusterName.toLowerCase() === lower ||
+          s.clusterId.toLowerCase() === lower
+      );
+      if (!exists) {
+        baseSites.push({
+          emrSiteCode: '-',
+          subfeederId: `SF-${c.name.toUpperCase()}`,
+          clusterId: c.id,
+          clusterName: c.name.toUpperCase(),
+          shortName: c.name.toUpperCase(),
+          oltName: 'OLT Blora',
+        });
+      }
+    }
+    return baseSites;
+  }, [clusters]);
+
   const [selectedSitelistOption, setSelectedSitelistOption] = useState<SiteOption | null>(null);
 
-  // Map sitelist clusterName to database cluster id
+  // Map sitelist shortName / clusterName / id to database cluster
   const clusterMap = useMemo(() => {
     const map = new Map<string, ClusterOption>();
-    clusters.forEach((c) => map.set(c.name.toLowerCase(), c));
+    clusters.forEach((c) => {
+      map.set(c.name.trim().toLowerCase(), c);
+      map.set(c.id.toLowerCase(), c);
+    });
     return map;
   }, [clusters]);
 
-  const resolveSelectedClusterId = useCallback((opt: SiteOption | null): string => {
-    if (!opt) return '';
-    const dbCluster = clusterMap.get(opt.clusterName.toLowerCase());
-    return dbCluster ? dbCluster.id : opt.clusterId;
-  }, [clusterMap]);
+  const resolveSelectedClusterId = useCallback(
+    (opt: SiteOption | null): string => {
+      if (!opt) return '';
+      const dbCluster =
+        clusterMap.get(opt.shortName.toLowerCase()) ||
+        clusterMap.get(opt.clusterName.toLowerCase()) ||
+        clusterMap.get(opt.clusterId.toLowerCase());
+      return dbCluster ? dbCluster.id : opt.clusterId;
+    },
+    [clusterMap]
+  );
+
+  // Helper to match a DB cluster to a SiteOption
+  const findSiteOptionForCluster = useCallback(
+    (dbCluster: ClusterOption): SiteOption | null => {
+      const lower = dbCluster.name.trim().toLowerCase();
+      return (
+        sitelistOptions.find(
+          (s) =>
+            s.shortName.toLowerCase() === lower ||
+            s.clusterName.toLowerCase() === lower ||
+            s.clusterId.toLowerCase() === lower ||
+            s.clusterId === dbCluster.id
+        ) || null
+      );
+    },
+    [sitelistOptions]
+  );
 
   // Initialize sitelist selection from initialClusterId
   useEffect(() => {
     if (initialClusterId) {
       const dbCluster = clusters.find((c) => c.id === initialClusterId);
       if (dbCluster) {
-        const sitelistOpt = sitelistOptions.find((s) => s.clusterName.toLowerCase() === dbCluster.name.toLowerCase());
-        setSelectedSitelistOption(sitelistOpt || null);
+        const sitelistOpt = findSiteOptionForCluster(dbCluster);
+        if (sitelistOpt) setSelectedSitelistOption(sitelistOpt);
       }
     } else if (clusters[0] && !selectedSitelistOption) {
-      const sitelistOpt = sitelistOptions.find((s) => s.clusterName.toLowerCase() === clusters[0]!.name.toLowerCase());
-      setSelectedSitelistOption(sitelistOpt || null);
+      const sitelistOpt = findSiteOptionForCluster(clusters[0]);
+      if (sitelistOpt) setSelectedSitelistOption(sitelistOpt);
     }
-  }, [initialClusterId, clusters, sitelistOptions, selectedSitelistOption]);
+  }, [initialClusterId, clusters, findSiteOptionForCluster, selectedSitelistOption]);
 
   // Sync sitelist selection to selectedClusterId
   useEffect(() => {
-    setSelectedClusterId(resolveSelectedClusterId(selectedSitelistOption));
+    if (selectedSitelistOption) {
+      setSelectedClusterId(resolveSelectedClusterId(selectedSitelistOption));
+    }
   }, [selectedSitelistOption, resolveSelectedClusterId]);
 
   // Items and photos
@@ -155,6 +206,9 @@ export default function DailyInputClient({
     setLoadingItems(true);
     getClusterItemsForForm(selectedClusterId).then((res) => {
       if (!isMounted) return;
+      if (res && res.cluster && res.cluster.id !== selectedClusterId) {
+        setSelectedClusterId(res.cluster.id);
+      }
       if (res && res.items) {
         setItems(
           res.items.map((it: any) => ({
@@ -197,6 +251,9 @@ export default function DailyInputClient({
       if (!isMounted) return;
       if (res.success) {
         setAvailableTeams(res.teams);
+        if (res.teams.length > 0) {
+          setTeamName((prev) => (prev.trim() ? prev : res.teams[0]));
+        }
       } else {
         setTeamListError(res.error || 'Gagal memuat daftar tim.');
       }
@@ -470,9 +527,6 @@ export default function DailyInputClient({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Cluster Selector */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Pilih Cluster <span className="text-rose-500">*</span>
-            </label>
             <SearchableDropdown
               options={sitelistOptions}
               value={selectedSitelistOption}
@@ -541,9 +595,23 @@ export default function DailyInputClient({
               </datalist>
             </div>
             {availableTeams.length > 0 && (
-              <p className="mt-1 text-[11px] text-slate-500">
-                Pilih tim yang sudah ada untuk mengoreksi laporannya, atau masukkan nama tim baru.
-              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] text-slate-500">Tim di tanggal ini:</span>
+                {availableTeams.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTeamName(t)}
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border transition ${
+                      teamName.trim() === t
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             )}
             {teamListError && (
               <p className="mt-1 text-[11px] text-rose-600">{teamListError}</p>

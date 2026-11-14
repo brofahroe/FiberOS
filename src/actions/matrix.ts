@@ -1,9 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import * as xlsx from 'xlsx';
-
-const excel = (xlsx as any).default || xlsx;
+import * as excel from 'xlsx';
 
 export async function getMatrixData(filterClusterId?: string) {
   try {

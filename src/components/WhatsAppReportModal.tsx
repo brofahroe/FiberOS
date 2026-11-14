@@ -116,10 +116,12 @@ export default function WhatsAppReportModal({
         setDatesList(res.data.availableDates);
       }
 
-      // Automatically update siteName and siteId for the selected cluster
-      const autoSiteName = `KELURAHAN ${res.data.clusterName.toUpperCase()} BLORA`;
+      // Automatically update siteName, siteId, and OLT for the selected cluster
+      const autoSiteName =
+        res.data.officialSiteName || `KELURAHAN ${res.data.clusterName.toUpperCase()} BLORA`;
       setSiteName(autoSiteName);
       if (res.data.siteId) setSiteId(res.data.siteId);
+      if (res.data.oltName) setOlt(res.data.oltName);
       if (res.data.reporterName) setSubconLeader(res.data.reporterName);
       if (res.data.teamName) setSubconName(res.data.teamName);
       setCustomMessage(null); // Reset manual edit to show fresh report

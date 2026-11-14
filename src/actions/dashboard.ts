@@ -253,7 +253,24 @@ export async function getDashboardData() {
     dateMap.set(rep.reportDate, entry);
   }
 
-  const dailyTrends = Array.from(dateMap.values());
+  const parseReportDate = (d: string) => {
+    const parts = d.split('-');
+    if (parts.length === 3 && isNaN(Number(parts[1]))) {
+      const months: { [k: string]: number } = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+      };
+      const day = parseInt(parts[0], 10);
+      const month = months[parts[1]] || 0;
+      const year = 2000 + parseInt(parts[2], 10);
+      return new Date(year, month, day).getTime();
+    }
+    return new Date(d).getTime() || 0;
+  };
+
+  const dailyTrends = Array.from(dateMap.values()).sort(
+    (a, b) => parseReportDate(a.date) - parseReportDate(b.date)
+  );
 
     return {
       project: projectSummary,

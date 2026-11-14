@@ -33,6 +33,7 @@ export function SearchableDropdown({
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [selectedOption, setSelectedOption] = useState<SiteOption | null>(value || null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -40,12 +41,16 @@ export function SearchableDropdown({
 
   useEffect(() => {
     setSelectedOption(value || null);
+    setIsEditing(false);
+    setQuery('');
   }, [value]);
 
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        setIsEditing(false);
+        setQuery('');
         setSelectedIndex(-1);
       }
     },
@@ -92,7 +97,8 @@ export function SearchableDropdown({
 
   const handleSelect = (opt: SiteOption) => {
     setSelectedOption(opt);
-    setQuery(opt.clusterName);
+    setQuery('');
+    setIsEditing(false);
     setIsOpen(false);
     setSelectedIndex(-1);
     onChange(opt);
@@ -103,7 +109,8 @@ export function SearchableDropdown({
     e.stopPropagation();
     setSelectedOption(null);
     setQuery('');
-    setIsOpen(false);
+    setIsEditing(true);
+    setIsOpen(true);
     setSelectedIndex(-1);
     onChange(null);
     inputRef.current?.focus();
@@ -129,18 +136,29 @@ export function SearchableDropdown({
       e.preventDefault();
       if (selectedIndex >= 0 && filteredOptions[selectedIndex]) {
         handleSelect(filteredOptions[selectedIndex]);
+      } else if (filteredOptions.length === 1 && filteredOptions[0]) {
+        handleSelect(filteredOptions[0]);
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false);
+      setIsEditing(false);
+      setQuery('');
       setSelectedIndex(-1);
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsEditing(true);
     setQuery(e.target.value);
     setIsOpen(true);
-    setSelectedIndex(-1);
+    setSelectedIndex(0);
   };
+
+  const displayValue = isEditing
+    ? query
+    : selectedOption
+    ? `${selectedOption.shortName} — ${selectedOption.clusterName}`
+    : query;
 
   return (
     <div ref={dropdownRef} className="w-full">
@@ -158,12 +176,19 @@ export function SearchableDropdown({
         <input
           ref={inputRef}
           type="text"
-          value={selectedOption ? selectedOption.clusterName : query}
+          value={displayValue}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => setIsOpen(true)}
+          onFocus={(e) => {
+            setIsOpen(true);
+            e.target.select();
+          }}
           onBlur={() => {
-            setTimeout(() => setIsOpen(false), 150);
+            setTimeout(() => {
+              setIsOpen(false);
+              setIsEditing(false);
+              setQuery('');
+            }, 150);
           }}
           placeholder={placeholder}
           disabled={disabled}
@@ -206,9 +231,12 @@ export function SearchableDropdown({
                     <button
                       key={opt.clusterId}
                       type="button"
-                      onClick={() => handleSelect(opt)}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(opt);
+                      }}
                       onMouseEnter={() => setSelectedIndex(idx)}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-sm transition ${isHighlighted ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'} ${isSelected ? 'bg-emerald-50 text-emerald-700 font-semibold' : ''}`}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm transition ${isHighlighted ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'} ${isSelected ? 'bg-emerald-50 text-emerald-700 font-semibold' : ''}`}
                     >
                       <div className="flex-1 truncate">
                         <div className="font-medium">{opt.clusterName}</div>

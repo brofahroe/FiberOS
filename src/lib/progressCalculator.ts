@@ -143,18 +143,28 @@ export function calculateClusterProgress(items: WorkItemCalculationInput[]): Clu
 
     let totalBoq = 0;
     let totalInstalled = 0;
-    let allDone = true;
+    let activeCount = 0;
+    let doneCount = 0;
 
     for (const it of itemList) {
       totalBoq += it.boq;
       const isDone = it.status === 'DONE';
-      if (!isDone) allDone = false;
       const effectiveInstalled = isDone ? Math.max(it.installed, it.boq > 0 ? it.boq : it.installed) : it.installed;
       totalInstalled += effectiveInstalled;
+
+      // Item dihitung aktif jika memiliki BOQ > 0, ada progres terpasang, atau sudah ditandai DONE
+      if (it.boq > 0 || it.installed > 0 || isDone) {
+        activeCount++;
+        if (isDone || (it.boq > 0 && it.installed >= it.boq)) {
+          doneCount++;
+        }
+      }
     }
 
+    const allDone = activeCount > 0 && doneCount >= activeCount;
+
     let percentage = 0;
-    if (allDone && itemList.length > 0) {
+    if (allDone) {
       percentage = 100;
     } else if (totalBoq > 0) {
       percentage = Math.min(100, Math.round((totalInstalled / totalBoq) * 100));

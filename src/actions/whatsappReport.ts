@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import sitelistData from '@/data/sitelist.json';
 
 export interface WaReportItemMetrics {
   boq: number;
@@ -12,7 +13,9 @@ export interface WaReportItemMetrics {
 export interface WaReportData {
   clusterId: string;
   clusterName: string;
+  officialSiteName: string;
   siteId: string;
+  oltName: string;
   reportDate: string;
   formattedDate: string;
   startImDate: string;
@@ -32,6 +35,21 @@ export interface WaReportData {
     cable: WaReportItemMetrics;
     jc: WaReportItemMetrics;
   };
+}
+
+function parseReportDateMs(d: string): number {
+  const parts = d.split('-');
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const months: Record<string, number> = {
+      Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+      Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+    };
+    const day = parseInt(parts[0], 10);
+    const month = months[parts[1]] || 0;
+    const year = 2000 + parseInt(parts[2], 10);
+    return new Date(year, month, day).getTime();
+  }
+  return new Date(d).getTime() || 0;
 }
 
 function normalizeDateStr(d: string): string {
@@ -94,14 +112,32 @@ export async function getWhatsAppReportData(
       orderBy: { createdAt: 'desc' },
     });
 
-    const clusterDates = Array.from(new Set(clusterReports.map((r) => r.reportDate)));
-    const allUniqueDates = Array.from(new Set(allReports.map((r) => r.reportDate)));
-    const availableDates = Array.from(new Set([...clusterDates, ...allUniqueDates]));
+    const clusterDates = Array.from(new Set(clusterReports.map((r) => r.reportDate))).sort(
+      (a, b) => parseReportDateMs(b) - parseReportDateMs(a)
+    );
+    const allUniqueDates = Array.from(new Set(allReports.map((r) => r.reportDate))).sort(
+      (a, b) => parseReportDateMs(b) - parseReportDateMs(a)
+    );
+    const availableDates = Array.from(new Set([...clusterDates, ...allUniqueDates])).sort(
+      (a, b) => parseReportDateMs(b) - parseReportDateMs(a)
+    );
 
     let targetReportDate = reportDate;
     if (!targetReportDate || targetReportDate.trim() === '') {
       targetReportDate = clusterDates[0] || availableDates[0] || '12-Nov-26';
     }
+
+    const reportsOnTargetDate = clusterReports.filter(
+      (r) =>
+        r.reportDate === targetReportDate ||
+        normalizeDateStr(r.reportDate) === normalizeDateStr(targetReportDate)
+    );
+    const reporterNames = Array.from(
+      new Set(reportsOnTargetDate.map((r) => r.reporterName?.trim()).filter(Boolean))
+    );
+    const teamNames = Array.from(
+      new Set(reportsOnTargetDate.map((r) => r.teamName?.trim()).filter(Boolean))
+    );
 
     // 3. Fetch cluster with workItems and progress
     const cluster = await prisma.cluster.findUnique({
@@ -191,19 +227,33 @@ export async function getWhatsAppReportData(
     const sfCable = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
     const sfJc = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'JC' || cat === 'JC' || name.includes('jc') || name.includes('joint closure'));
 
-    const siteId = cluster.code || `CLRMO7-99-${cluster.name.toUpperCase()}`;
+    // Match with official sitelist metadata
+    const lowerClusterName = cluster.name.trim().toLowerCase();
+    const matchedSite = sitelistData.sites.find(
+      (s) =>
+        s.shortName.toLowerCase() === lowerClusterName ||
+        s.clusterName.toLowerCase() === lowerClusterName ||
+        s.clusterId.toLowerCase() === lowerClusterName ||
+        lowerClusterName.includes(s.shortName.toLowerCase())
+    );
+
+    const siteId = matchedSite?.clusterId || cluster.code || `CLRMO7-99-${cluster.name.toUpperCase()}`;
+    const officialSiteName = matchedSite?.clusterName || `KELURAHAN ${cluster.name.toUpperCase()} BLORA`;
+    const oltName = matchedSite?.oltName ? matchedSite.oltName.replace(/^OLT\s+/i, '') : 'Balun';
 
     return {
       success: true,
       data: {
         clusterId: cluster.id,
         clusterName: cluster.name,
+        officialSiteName,
         siteId,
+        oltName,
         reportDate: targetReportDate,
         formattedDate: formatIndoDate(targetReportDate),
         startImDate: '01/11/26',
-        reporterName: '',
-        teamName: '',
+        reporterName: reporterNames.join(', '),
+        teamName: teamNames.join(', '),
         availableClusters: allClusters,
         availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
         distribusi: {

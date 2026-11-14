@@ -1,12 +1,10 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import * as xlsx from 'xlsx';
+import * as excel from 'xlsx';
 import path from 'path';
 import fs from 'fs';
 import { revalidatePath } from 'next/cache';
-
-const excel = (xlsx as any).default || xlsx;
 
 function detectCategory(itemName: string) {
   const lower = itemName.toLowerCase();

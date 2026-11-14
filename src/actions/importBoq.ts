@@ -1,12 +1,10 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import * as xlsx from 'xlsx';
+import * as excel from 'xlsx';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
-
-const excel = (xlsx as any).default || xlsx;
 
 export interface ParsedBoqItem {
   itemName: string;

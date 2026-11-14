@@ -3,19 +3,135 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { uploadFileToNextcloud } from '@/lib/nextcloud';
+import sitelistData from '@/data/sitelist.json';
 
-export async function getClusterItemsForForm(clusterId: string) {
-  const cluster = await prisma.cluster.findUnique({
-    where: { id: clusterId },
+async function resolveOrProvisionCluster(clusterIdOrCode: string) {
+  if (!clusterIdOrCode) return null;
+
+  // 1. Try direct ID lookup
+  let cluster = await prisma.cluster.findUnique({
+    where: { id: clusterIdOrCode },
     include: {
       workItems: {
-        include: {
-          progressList: true,
-        },
+        include: { progressList: true },
         orderBy: { sortOrder: 'asc' },
       },
     },
   });
+
+  if (cluster) return cluster;
+
+  // 2. Match against sitelist.json or existing clusters by name/code
+  const lower = clusterIdOrCode.trim().toLowerCase();
+  const matchedSite = sitelistData.sites.find(
+    (s) =>
+      s.clusterId.toLowerCase() === lower ||
+      s.shortName.toLowerCase() === lower ||
+      s.clusterName.toLowerCase() === lower ||
+      s.emrSiteCode.toLowerCase() === lower
+  );
+
+  const allClusters = await prisma.cluster.findMany({
+    include: {
+      workItems: {
+        include: { progressList: true },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+  });
+
+  cluster =
+    allClusters.find((c) => {
+      const cName = c.name.trim().toLowerCase();
+      const cCode = (c.code || '').trim().toLowerCase();
+      if (cName === lower || cCode === lower) return true;
+      if (matchedSite) {
+        return (
+          cName === matchedSite.shortName.toLowerCase() ||
+          cName === matchedSite.clusterName.toLowerCase() ||
+          cCode === matchedSite.clusterId.toLowerCase()
+        );
+      }
+      return false;
+    }) || null;
+
+  if (cluster) return cluster;
+
+  // 3. Auto-provision if found in sitelist.json but not yet in DB
+  if (matchedSite) {
+    let project = await prisma.project.findFirst();
+    if (!project) {
+      project = await prisma.project.create({
+        data: {
+          code: 'BLA-KEDUNGTUBAN',
+          name: 'ALL CL KEDUNGTUBAN BLORA',
+          description: 'Proyek FTTH Rollout Kedungtuban Blora',
+        },
+      });
+    }
+
+    const newCluster = await prisma.cluster.create({
+      data: {
+        projectId: project.id,
+        name: matchedSite.shortName,
+        code: matchedSite.clusterId,
+        homePasses: 0,
+      },
+    });
+
+    const defaultWorkItems = [
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "3"', unit: 'Btg', sortOrder: 1 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "2.5"', unit: 'Btg', sortOrder: 2 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 3 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 9m "4"', unit: 'Btg', sortOrder: 4 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 5 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 6 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 7 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Unit', sortOrder: 8 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT 48c', unit: 'Unit', sortOrder: 9 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT 72c', unit: 'Unit', sortOrder: 10 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT 96c', unit: 'Unit', sortOrder: 11 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'ACCESSORY', subCategory: 'ACC', weight: 10, itemName: 'Aksesoris & Perapihan Cluster', unit: 'Meter', sortOrder: 40 },
+      { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Tiang Feeder (Pole SF)', unit: 'Btg', sortOrder: 100 },
+      { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel Feeder (Cable SF)', unit: 'Meter', sortOrder: 101 },
+      { scope: 'SUBFEEDER', workType: 'CW', category: 'ACCESSORY', subCategory: 'ACC', weight: 10, itemName: 'Aksesoris & Perapihan Subfeeder', unit: 'Meter', sortOrder: 102 },
+      { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Unit', sortOrder: 103 },
+    ];
+
+    for (const wi of defaultWorkItems) {
+      await prisma.workItem.create({
+        data: {
+          clusterId: newCluster.id,
+          scope: wi.scope,
+          workType: wi.workType,
+          category: wi.category,
+          subCategory: wi.subCategory,
+          weight: wi.weight,
+          itemName: wi.itemName,
+          unit: wi.unit,
+          boq: 0,
+          status: 'ONGOING',
+          sortOrder: wi.sortOrder,
+        },
+      });
+    }
+
+    return prisma.cluster.findUnique({
+      where: { id: newCluster.id },
+      include: {
+        workItems: {
+          include: { progressList: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+  }
+
+  return null;
+}
+
+export async function getClusterItemsForForm(clusterId: string) {
+  const cluster = await resolveOrProvisionCluster(clusterId);
 
   if (!cluster) return null;
 
@@ -66,9 +182,31 @@ export async function submitDailyProgress(data: {
   }
 
   try {
-    // Check if any item to submit is already marked as DONE
+    // Resolve clusterId in case a sitelist code was passed
+    const resolvedCluster = await resolveOrProvisionCluster(data.clusterId);
+    const targetClusterId = resolvedCluster ? resolvedCluster.id : data.clusterId;
+
+    // Find if report already exists for this cluster, date, and team
+    const existingReport = await prisma.dailyReport.findUnique({
+      where: {
+        clusterId_reportDate_teamName: {
+          clusterId: targetClusterId,
+          reportDate: data.reportDate,
+          teamName,
+        },
+      },
+      include: { items: true },
+    });
+
+    const existingQtyMap = new Map<string, number>();
+    if (existingReport) {
+      existingReport.items.forEach((it) => existingQtyMap.set(it.workItemId, it.quantity));
+    }
+
+    // Check if any item to submit is already marked as DONE and attempting to add new volume
     for (const item of data.items) {
-      if (item.quantity > 0) {
+      const prevQty = existingQtyMap.get(item.workItemId) || 0;
+      if (item.quantity > prevQty) {
         const workItem = await prisma.workItem.findUnique({
           where: { id: item.workItemId },
         });
@@ -105,7 +243,7 @@ export async function submitDailyProgress(data: {
             const uploadRes = await uploadFileToNextcloud({
               buffer,
               fileName,
-              subFolder: data.clusterId,
+              subFolder: targetClusterId,
               contentType: mimeType,
             });
 
@@ -125,36 +263,29 @@ export async function submitDailyProgress(data: {
       }
     }
 
-    // Find if report already exists for this cluster and date
-    let report = await prisma.dailyReport.findUnique({
-      where: {
-        clusterId_reportDate_teamName: {
-          clusterId: data.clusterId,
-          reportDate: data.reportDate,
-          teamName,
-        },
-      },
-    });
-
-    if (report) {
-      // Update existing report details
+    let report;
+    if (existingReport) {
+      // Update existing report details (replace notes and photos cleanly so edit mode doesn't duplicate)
       report = await prisma.dailyReport.update({
-        where: { id: report.id },
+        where: { id: existingReport.id },
         data: {
-          reporterName: data.reporterName || report.reporterName,
+          reporterName: data.reporterName !== undefined ? data.reporterName : existingReport.reporterName,
           teamName,
-          weather: data.weather || report.weather,
-          notes: data.notes ? `${report.notes ? report.notes + ' | ' : ''}${data.notes}` : report.notes,
-          photos: savedPhotoPaths.length > 0 
-            ? JSON.stringify([...(report.photos ? JSON.parse(report.photos) : []), ...savedPhotoPaths])
-            : report.photos,
+          weather: data.weather || existingReport.weather,
+          notes: data.notes !== undefined ? data.notes : existingReport.notes,
+          photos:
+            data.photoBase64List !== undefined
+              ? savedPhotoPaths.length > 0
+                ? JSON.stringify(savedPhotoPaths)
+                : null
+              : existingReport.photos,
         },
       });
     } else {
       // Create new daily report
       report = await prisma.dailyReport.create({
         data: {
-          clusterId: data.clusterId,
+          clusterId: targetClusterId,
           reportDate: data.reportDate,
           reporterName: data.reporterName,
           teamName,
