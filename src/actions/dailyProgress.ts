@@ -64,7 +64,7 @@ async function resolveOrProvisionCluster(clusterIdOrCode: string) {
       project = await prisma.project.create({
         data: {
           code: 'BLA-KEDUNGTUBAN',
-          name: 'ALL CL KEDUNGTUBAN BLORA',
+          name: 'ROLLOUT GCI-MTI BLORA',
           description: 'Proyek FTTH Rollout Kedungtuban Blora',
         },
       });
