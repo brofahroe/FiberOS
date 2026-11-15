@@ -8,6 +8,7 @@ import {
   RegionSummaryItem,
   createOrActivateSitelistCluster,
   activateAllSitelistClusters,
+  deactivateSitelistCluster,
 } from '@/actions/sitelist';
 import {
   MapPin,
@@ -21,6 +22,7 @@ import {
   Zap,
   Layers,
   Edit3,
+  PowerOff,
   X,
   Check,
   HardHat,
@@ -56,12 +58,14 @@ export default function SitelistClient({
 
   // Action states
   const [activatingKey, setActivatingKey] = useState<string | null>(null);
+  const [deactivatingKey, setDeactivatingKey] = useState<string | null>(null);
   const [activatingAll, setActivatingAll] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Add / Edit New Cluster Modal state
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [isEditingExisting, setIsEditingExisting] = useState<boolean>(false);
+  const [editingDbClusterId, setEditingDbClusterId] = useState<string | null>(null);
   const [submittingModal, setSubmittingModal] = useState<boolean>(false);
   const [formEmrSiteCode, setFormEmrSiteCode] = useState<string>('');
   const [formSubfeederId, setFormSubfeederId] = useState<string>('');
@@ -72,6 +76,7 @@ export default function SitelistClient({
   const [formKecamatan, setFormKecamatan] = useState<string>('Kedungtuban');
   const [formKabupaten, setFormKabupaten] = useState<string>('Blora');
   const [formHomePasses, setFormHomePasses] = useState<string>('0');
+  const [formIsActive, setFormIsActive] = useState<boolean>(true);
 
   // Filtered entries for table & dynamic KPI summary
   const filteredEntries = useMemo(() => {
@@ -144,6 +149,7 @@ export default function SitelistClient({
 
   const openNewClusterModal = () => {
     setIsEditingExisting(false);
+    setEditingDbClusterId(null);
     setFormEmrSiteCode('');
     setFormSubfeederId('');
     setFormClusterId('');
@@ -153,11 +159,13 @@ export default function SitelistClient({
     setFormKecamatan(selectedKecamatan !== 'ALL' ? selectedKecamatan : 'Kedungtuban');
     setFormKabupaten(selectedKabupaten !== 'ALL' ? selectedKabupaten : 'Blora');
     setFormHomePasses('0');
+    setFormIsActive(true);
     setShowAddModal(true);
   };
 
   const openEditClusterModal = (entry: SitelistEntry) => {
     setIsEditingExisting(entry.isProvisioned);
+    setEditingDbClusterId(entry.dbClusterId);
     setFormEmrSiteCode(entry.emrSiteCode === '-' ? '' : entry.emrSiteCode);
     setFormSubfeederId(entry.subfeederId);
     setFormClusterId(entry.clusterId);
@@ -167,7 +175,37 @@ export default function SitelistClient({
     setFormKecamatan(entry.kecamatan);
     setFormKabupaten(entry.kabupaten);
     setFormHomePasses(String(entry.homePasses || 0));
+    setFormIsActive(entry.isProvisioned);
     setShowAddModal(true);
+  };
+
+  const handleDeactivateEntry = async (entry: SitelistEntry) => {
+    if (
+      !confirm(
+        `Ubah status cluster "${entry.shortName}" dari Aktif menjadi Belum Aktif?\n\nCluster akan dinonaktifkan dari Dashboard, Matriks & Input Harian.`
+      )
+    ) {
+      return;
+    }
+
+    setDeactivatingKey(entry.key);
+    setFeedback(null);
+    const res = await deactivateSitelistCluster({
+      dbClusterId: entry.dbClusterId,
+      shortName: entry.shortName,
+    });
+    setDeactivatingKey(null);
+
+    if (res.success) {
+      setShowAddModal(false);
+      setFeedback({
+        type: 'success',
+        text: res.message || `Status cluster "${entry.shortName}" berhasil diubah ke Belum Aktif!`,
+      });
+      router.refresh();
+    } else {
+      setFeedback({ type: 'error', text: res.error || 'Gagal menonaktifkan cluster.' });
+    }
   };
 
   const handleActivateEntry = async (entry: SitelistEntry) => {
@@ -224,6 +262,7 @@ export default function SitelistClient({
 
     const shortClean = formShortName.trim().toUpperCase();
     const res = await createOrActivateSitelistCluster({
+      dbClusterId: editingDbClusterId,
       emrSiteCode: formEmrSiteCode.trim() || '-',
       subfeederId: formSubfeederId.trim() || `SFM07-99-${shortClean}`,
       clusterId: formClusterId.trim() || `CLRM07-99-${shortClean}`,
@@ -233,6 +272,7 @@ export default function SitelistClient({
       kecamatan: formKecamatan.trim() || 'Kedungtuban',
       kabupaten: formKabupaten.trim() || 'Blora',
       homePasses: parseInt(formHomePasses, 10) || 0,
+      isActive: isEditingExisting ? formIsActive : true,
     });
 
     setSubmittingModal(false);
@@ -799,10 +839,23 @@ export default function SitelistClient({
                           <button
                             type="button"
                             onClick={() => openEditClusterModal(entry)}
-                            className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
-                            title="Edit Identitas Cluster / HP"
+                            className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
+                            title="Edit Identitas & Status Cluster"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeactivateEntry(entry)}
+                            disabled={deactivatingKey === entry.key}
+                            className="p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition disabled:opacity-50"
+                            title="Ubah Status ke Belum Aktif (Nonaktifkan)"
+                          >
+                            {deactivatingKey === entry.key ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                            ) : (
+                              <PowerOff className="w-3.5 h-3.5" />
+                            )}
                           </button>
                         </div>
                       ) : (
@@ -997,28 +1050,122 @@ export default function SitelistClient({
                     ))}
                   </datalist>
                 </div>
+
+                {isEditingExisting && (
+                  <div className="sm:col-span-2 pt-2 border-t border-slate-100">
+                    <label className="font-bold text-slate-700 block mb-1.5">
+                      Status Cluster di Proyek
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setFormIsActive(true)}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition ${
+                          formIsActive
+                            ? 'bg-emerald-50 border-emerald-500 text-emerald-800 ring-2 ring-emerald-500/20'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Aktif di Proyek</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormIsActive(false)}
+                        className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition ${
+                          !formIsActive
+                            ? 'bg-amber-50 border-amber-500 text-amber-800 ring-2 ring-amber-500/20'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <PowerOff className="w-4 h-4 text-amber-600" />
+                        <span>Belum Aktif (Nonaktifkan)</span>
+                      </button>
+                    </div>
+                    {!formIsActive && (
+                      <p className="text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200 rounded-lg px-3 py-1.5 mt-2">
+                        ⚠️ Klik <strong>Simpan Perubahan</strong> di bawah untuk mengubah status cluster <strong>{formShortName}</strong> kembali menjadi <strong>Belum Aktif</strong>.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingModal}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition disabled:opacity-50"
-                >
-                  {submittingModal ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Check className="w-4 h-4" />
+              <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                <div>
+                  {isEditingExisting && (
+                    <button
+                      type="button"
+                      disabled={submittingModal}
+                      onClick={() =>
+                        handleDeactivateEntry({
+                          key: editingDbClusterId || formShortName,
+                          dbClusterId: editingDbClusterId,
+                          isProvisioned: true,
+                          emrSiteCode: formEmrSiteCode,
+                          subfeederId: formSubfeederId,
+                          clusterId: formClusterId,
+                          clusterName: formClusterName,
+                          shortName: formShortName,
+                          oltName: formOltName,
+                          kecamatan: formKecamatan,
+                          kabupaten: formKabupaten,
+                          homePasses: parseInt(formHomePasses, 10) || 0,
+                          percentage: 0,
+                          clrPercentage: 0,
+                          sfPercentage: 0,
+                          status: 'NOT_STARTED',
+                          poleInstalled: 0,
+                          poleBoq: 0,
+                          cableInstalled: 0,
+                          cableBoq: 0,
+                          fatInstalled: 0,
+                          fatBoq: 0,
+                          fdtInstalled: 0,
+                          fdtBoq: 0,
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold transition disabled:opacity-50"
+                    >
+                      <PowerOff className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Set Belum Aktif</span>
+                    </button>
                   )}
-                  <span>{isEditingExisting ? 'Simpan Perubahan' : 'Simpan & Aktifkan Cluster'}</span>
-                </button>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingModal}
+                    className={`inline-flex items-center gap-1.5 px-5 py-2.5 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50 ${
+                      isEditingExisting && !formIsActive
+                        ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/20'
+                        : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                    }`}
+                  >
+                    {submittingModal ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : !formIsActive && isEditingExisting ? (
+                      <PowerOff className="w-4 h-4" />
+                    ) : (
+                      <Check className="w-4 h-4" />
+                    )}
+                    <span>
+                      {isEditingExisting
+                        ? !formIsActive
+                          ? 'Simpan (Ubah ke Belum Aktif)'
+                          : 'Simpan Perubahan'
+                        : 'Simpan & Aktifkan Cluster'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

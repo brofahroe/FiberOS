@@ -365,6 +365,7 @@ export async function getSitelistData() {
 }
 
 export async function createOrActivateSitelistCluster(input: {
+  dbClusterId?: string | null;
   emrSiteCode: string;
   subfeederId: string;
   clusterId: string;
@@ -374,6 +375,7 @@ export async function createOrActivateSitelistCluster(input: {
   kecamatan: string;
   kabupaten: string;
   homePasses?: number;
+  isActive?: boolean;
 }) {
   try {
     const shortName = input.shortName.trim().toUpperCase();
@@ -392,20 +394,48 @@ export async function createOrActivateSitelistCluster(input: {
       });
     }
 
-    // Check if cluster already exists by name
-    const existing = await prisma.cluster.findFirst({
-      where: {
-        projectId: project.id,
-        name: shortName,
-      },
-      include: { workItems: true },
-    });
+    // Check if cluster already exists by dbClusterId or by name
+    const existing = input.dbClusterId
+      ? await prisma.cluster.findUnique({
+          where: { id: input.dbClusterId },
+          include: { workItems: true },
+        })
+      : await prisma.cluster.findFirst({
+          where: {
+            projectId: project.id,
+            name: shortName,
+          },
+          include: { workItems: true },
+        });
+
+    // If user chose "Belum Aktif" (isActive === false), deactivate/delete the cluster from active DB
+    if (input.isActive === false) {
+      if (existing) {
+        await prisma.cluster.delete({
+          where: { id: existing.id },
+        });
+        await backupDatabaseToNextcloud();
+      }
+
+      revalidatePath('/');
+      revalidatePath('/sitelist');
+      revalidatePath('/clusters');
+      revalidatePath('/daily-input');
+      revalidatePath('/matrix');
+
+      return {
+        success: true,
+        clusterId: null,
+        message: `Status cluster "${shortName}" berhasil diubah menjadi Belum Aktif!`,
+      };
+    }
 
     if (existing) {
       // Update metadata if already exists
       const updated = await prisma.cluster.update({
         where: { id: existing.id },
         data: {
+          name: shortName,
           code: input.clusterId.trim() || existing.code,
           emrSiteCode: input.emrSiteCode.trim() || existing.emrSiteCode,
           subfeederId: input.subfeederId.trim() || existing.subfeederId,
@@ -483,6 +513,46 @@ export async function createOrActivateSitelistCluster(input: {
   } catch (error: unknown) {
     console.error('Error creating/activating cluster from sitelist:', error);
     const errMsg = error instanceof Error ? error.message : 'Gagal menambahkan cluster baru.';
+    return { success: false, error: errMsg };
+  }
+}
+
+export async function deactivateSitelistCluster(input: {
+  dbClusterId?: string | null;
+  shortName: string;
+}) {
+  try {
+    const shortName = input.shortName.trim().toUpperCase();
+    const target = input.dbClusterId
+      ? await prisma.cluster.findUnique({ where: { id: input.dbClusterId } })
+      : await prisma.cluster.findFirst({ where: { name: shortName } });
+
+    if (!target) {
+      return {
+        success: false,
+        error: `Cluster "${shortName}" sudah berstatus Belum Aktif.`,
+      };
+    }
+
+    await prisma.cluster.delete({
+      where: { id: target.id },
+    });
+
+    await backupDatabaseToNextcloud();
+
+    revalidatePath('/');
+    revalidatePath('/sitelist');
+    revalidatePath('/clusters');
+    revalidatePath('/daily-input');
+    revalidatePath('/matrix');
+
+    return {
+      success: true,
+      message: `Status cluster "${target.name}" berhasil diubah dari Aktif menjadi Belum Aktif!`,
+    };
+  } catch (error: unknown) {
+    console.error('Error deactivating sitelist cluster:', error);
+    const errMsg = error instanceof Error ? error.message : 'Gagal menonaktifkan cluster.';
     return { success: false, error: errMsg };
   }
 }

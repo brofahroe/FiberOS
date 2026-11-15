@@ -113,6 +113,8 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
 
       if (!Array.isArray(proj.clusters)) continue;
 
+      const restoredClusterIds: string[] = [];
+
       for (const cl of proj.clusters) {
         const dbCluster = await prisma.cluster.upsert({
           where: {
@@ -146,6 +148,7 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
             createdAt: cl.createdAt ? new Date(cl.createdAt) : undefined,
           },
         });
+        restoredClusterIds.push(dbCluster.id);
 
         // Map old workItem.id -> actual dbWorkItem.id in case IDs differed
         const workItemIdMap = new Map<string, string>();
@@ -188,9 +191,18 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
             });
             workItemIdMap.set(wi.id, dbWi.id);
           }
+
+          const validWiIds = Array.from(workItemIdMap.values());
+          await prisma.workItem.deleteMany({
+            where: {
+              clusterId: dbCluster.id,
+              id: { notIn: validWiIds },
+            },
+          });
         }
 
         if (Array.isArray(cl.dailyReports)) {
+          const restoredReportIds: string[] = [];
           for (const rep of cl.dailyReports) {
             const teamName = rep.teamName || 'Tim FTTH Blora';
             const dbReport = await prisma.dailyReport.upsert({
@@ -221,6 +233,7 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
                 updatedAt: rep.updatedAt ? new Date(rep.updatedAt) : undefined,
               },
             });
+            restoredReportIds.push(dbReport.id);
 
             if (Array.isArray(rep.items)) {
               for (const item of rep.items) {
@@ -255,8 +268,23 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
               }
             }
           }
+
+          await prisma.dailyReport.deleteMany({
+            where: {
+              clusterId: dbCluster.id,
+              id: { notIn: restoredReportIds },
+            },
+          });
         }
       }
+
+      // Remove any local seed clusters that were deactivated/deleted in the cloud snapshot
+      await prisma.cluster.deleteMany({
+        where: {
+          projectId: dbProject.id,
+          id: { notIn: restoredClusterIds },
+        },
+      });
     }
 
     hasRestoredInThisProcess = true;

@@ -51,6 +51,8 @@ async function main() {
 
       if (!Array.isArray(proj.clusters)) continue;
 
+      const restoredClusterIds = [];
+
       for (const cl of proj.clusters) {
         const dbCluster = await prisma.cluster.upsert({
           where: {
@@ -84,6 +86,7 @@ async function main() {
             createdAt: cl.createdAt ? new Date(cl.createdAt) : undefined,
           },
         });
+        restoredClusterIds.push(dbCluster.id);
 
         const workItemIdMap = new Map();
 
@@ -125,9 +128,18 @@ async function main() {
             });
             workItemIdMap.set(wi.id, dbWi.id);
           }
+
+          const validWiIds = Array.from(workItemIdMap.values());
+          await prisma.workItem.deleteMany({
+            where: {
+              clusterId: dbCluster.id,
+              id: { notIn: validWiIds },
+            },
+          });
         }
 
         if (Array.isArray(cl.dailyReports)) {
+          const restoredReportIds = [];
           for (const rep of cl.dailyReports) {
             const teamName = rep.teamName || 'Tim FTTH Blora';
             const dbReport = await prisma.dailyReport.upsert({
@@ -158,6 +170,7 @@ async function main() {
                 updatedAt: rep.updatedAt ? new Date(rep.updatedAt) : undefined,
               },
             });
+            restoredReportIds.push(dbReport.id);
 
             if (Array.isArray(rep.items)) {
               for (const item of rep.items) {
@@ -191,8 +204,23 @@ async function main() {
               }
             }
           }
+
+          await prisma.dailyReport.deleteMany({
+            where: {
+              clusterId: dbCluster.id,
+              id: { notIn: restoredReportIds },
+            },
+          });
         }
       }
+
+      // Remove any local seed clusters that were deactivated/deleted in the cloud snapshot
+      await prisma.cluster.deleteMany({
+        where: {
+          projectId: dbProject.id,
+          id: { notIn: restoredClusterIds },
+        },
+      });
     }
 
     console.log('✅ Cloud database snapshot restored successfully!');
