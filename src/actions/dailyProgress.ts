@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { uploadFileToNextcloud } from '@/lib/nextcloud';
+import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 import sitelistData from '@/data/sitelist.json';
 
 async function resolveOrProvisionCluster(clusterIdOrCode: string) {
@@ -82,22 +83,20 @@ async function resolveOrProvisionCluster(clusterIdOrCode: string) {
     });
 
     const defaultWorkItems = [
-      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "3"', unit: 'Btg', sortOrder: 1 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "2.5"', unit: 'Btg', sortOrder: 2 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 3 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 9m "4"', unit: 'Btg', sortOrder: 4 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 5 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 6 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 7 },
-      { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Unit', sortOrder: 8 },
-      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT 48c', unit: 'Unit', sortOrder: 9 },
-      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT 72c', unit: 'Unit', sortOrder: 10 },
-      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT 96c', unit: 'Unit', sortOrder: 11 },
-      { scope: 'CLUSTER', workType: 'CW', category: 'ACCESSORY', subCategory: 'ACC', weight: 10, itemName: 'Aksesoris & Perapihan Cluster', unit: 'Meter', sortOrder: 40 },
-      { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Tiang Feeder (Pole SF)', unit: 'Btg', sortOrder: 100 },
-      { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel Feeder (Cable SF)', unit: 'Meter', sortOrder: 101 },
-      { scope: 'SUBFEEDER', workType: 'CW', category: 'ACCESSORY', subCategory: 'ACC', weight: 10, itemName: 'Aksesoris & Perapihan Subfeeder', unit: 'Meter', sortOrder: 102 },
-      { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Unit', sortOrder: 103 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "2.5"', unit: 'Unit', sortOrder: 1 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "3"', unit: 'Unit', sortOrder: 2 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "4"', unit: 'Unit', sortOrder: 3 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 4 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 5 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 6 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 7 },
+      { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 8 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Unit', sortOrder: 9 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Unit', sortOrder: 10 },
+      { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Unit', sortOrder: 11 },
+      { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Unit', sortOrder: 100 },
+      { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 101 },
+      { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Unit', sortOrder: 102 },
     ];
 
     for (const wi of defaultWorkItems) {
@@ -133,6 +132,7 @@ async function resolveOrProvisionCluster(clusterIdOrCode: string) {
 }
 
 export async function getClusterItemsForForm(clusterId: string) {
+  await ensureDatabaseRestoredFromNextcloud();
   const cluster = await resolveOrProvisionCluster(clusterId);
 
   if (!cluster) return null;
@@ -184,6 +184,7 @@ export async function submitDailyProgress(data: {
   }
 
   try {
+    await ensureDatabaseRestoredFromNextcloud();
     // Resolve clusterId in case a sitelist code was passed
     const resolvedCluster = await resolveOrProvisionCluster(data.clusterId);
     const targetClusterId = resolvedCluster ? resolvedCluster.id : data.clusterId;
@@ -328,9 +329,12 @@ export async function submitDailyProgress(data: {
       }
     }
 
+    await backupDatabaseToNextcloud();
+
     revalidatePath('/');
     revalidatePath('/matrix');
     revalidatePath('/clusters');
+    revalidatePath('/sitelist');
 
     return { success: true, message: 'Laporan progres harian berhasil disimpan!' };
   } catch (error: any) {
@@ -444,6 +448,11 @@ export async function updateDailyCellProgress(
           notes: 'Koreksi progres via Matriks',
         },
       });
+    } else {
+      await prisma.dailyReport.update({
+        where: { id: report.id },
+        data: { updatedAt: new Date() },
+      });
     }
 
     // 2. If newQuantity <= 0, delete or zero out the item
@@ -474,9 +483,12 @@ export async function updateDailyCellProgress(
       });
     }
 
+    await backupDatabaseToNextcloud();
+
     revalidatePath('/');
     revalidatePath('/matrix');
     revalidatePath('/clusters');
+    revalidatePath('/sitelist');
 
     return { success: true, message: `Progres tanggal ${reportDate} berhasil diperbarui.` };
   } catch (error: any) {
@@ -515,9 +527,12 @@ export async function deleteDailyReportByDate(clusterId: string, reportDate: str
       where: { id: report.id },
     });
 
+    await backupDatabaseToNextcloud();
+
     revalidatePath('/');
     revalidatePath('/matrix');
     revalidatePath('/clusters');
+    revalidatePath('/sitelist');
 
     return { success: true, message: `Laporan progres tanggal ${reportDate} berhasil dihapus.` };
   } catch (error: any) {

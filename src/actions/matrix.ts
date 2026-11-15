@@ -3,9 +3,11 @@
 import { prisma } from '@/lib/prisma';
 import * as excel from 'xlsx';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
+import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 
 export async function getMatrixData(filterClusterId?: string) {
   try {
+    await ensureDatabaseRestoredFromNextcloud();
     await cleanupLegacyRawBoqItems();
 
     const whereClause = filterClusterId && filterClusterId !== 'ALL' ? { id: filterClusterId } : {};
@@ -213,6 +215,7 @@ export async function updateWorkItemStatus(workItemId: string, status: string) {
       where: { id: workItemId },
       data: { status },
     });
+    await backupDatabaseToNextcloud();
     return { success: true, status: updated.status };
   } catch (err: any) {
     console.error('Error updating status:', err);

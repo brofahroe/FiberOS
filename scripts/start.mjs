@@ -21,6 +21,9 @@ try {
   console.log('Checking database seed...');
   execSync('node scripts/seed-if-empty.mjs', { stdio: 'inherit' });
 
+  console.log('Restoring persistent cloud database snapshot from Nextcloud...');
+  execSync('node scripts/restore-from-nextcloud.mjs', { stdio: 'inherit' });
+
   console.log('Running weighted items migration...');
   execSync('node scripts/migrate-weighted-items.mjs', { stdio: 'inherit' });
 } catch (err) {

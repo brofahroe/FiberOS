@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import boqListFallback from '@/data/boq-list.json';
 import sitelistData from '@/data/sitelist.json';
+import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 
 export interface BoqReferenceRule {
   itemPekerjaan: string;
@@ -386,6 +387,8 @@ export async function commitBoqImport(data: {
   items: ParsedBoqItem[];
 }) {
   try {
+    await ensureDatabaseRestoredFromNextcloud();
+
     let project = await prisma.project.findFirst({
       where: { code: 'BLA-KEDUNGTUBAN' },
     });
@@ -520,6 +523,8 @@ export async function commitBoqImport(data: {
         },
       });
     }
+
+    await backupDatabaseToNextcloud();
 
     revalidatePath('/');
     revalidatePath('/matrix');

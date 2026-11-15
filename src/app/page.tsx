@@ -103,14 +103,19 @@ export default async function DashboardPage() {
           </div>
 
           <div className="divide-y divide-slate-100">
-            {recentReports.slice(0, 5).map((rep) => (
+            {recentReports.slice(0, 10).map((rep) => (
               <div key={rep.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-sm text-slate-800">{rep.cluster.name}</span>
                     <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">
                       {rep.reportDate}
                     </span>
+                    {rep.teamName && (
+                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[11px] font-medium">
+                        {rep.teamName}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-auto">

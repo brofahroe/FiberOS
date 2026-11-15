@@ -4,11 +4,13 @@ import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import { runInitialSeed } from '@/actions/seed';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
+import { ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 import { calculateClusterProgress } from '@/lib/progressCalculator';
 import sitelistData from '@/data/sitelist.json';
 
 export async function getDashboardData() {
   try {
+    await ensureDatabaseRestoredFromNextcloud();
     await cleanupLegacyRawBoqItems();
 
     let project = await prisma.project.findFirst({
@@ -226,60 +228,6 @@ export async function getDashboardData() {
     orderBy: { reportDate: 'asc' },
   });
 
-  const activityByClusterDate = new Map<
-    string,
-    {
-      clusterId: string;
-      cluster: { id: string; name: string };
-      reportDate: string;
-      createdAt: Date;
-      itemIds: Set<string>;
-    }
-  >();
-
-  for (const report of allDailyReports) {
-    const key = `${report.clusterId}:${report.reportDate}`;
-    let activity = activityByClusterDate.get(key);
-    if (!activity) {
-      activity = {
-        clusterId: report.clusterId,
-        cluster: report.cluster,
-        reportDate: report.reportDate,
-        createdAt: report.createdAt,
-        itemIds: new Set<string>(),
-      };
-      activityByClusterDate.set(key, activity);
-    } else if (report.createdAt > activity.createdAt) {
-      activity.createdAt = report.createdAt;
-    }
-
-    for (const item of report.items) {
-      activity.itemIds.add(item.workItemId);
-    }
-  }
-
-  const recentReports = Array.from(activityByClusterDate.values())
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 10)
-    .map((activity) => ({
-      id: `${activity.clusterId}-${activity.reportDate}`,
-      clusterId: activity.clusterId,
-      cluster: activity.cluster,
-      reportDate: activity.reportDate,
-      items: Array.from(activity.itemIds, (workItemId) => ({ workItemId })),
-    }));
-
-  const dateMap = new Map<string, { date: string; pole: number; cable: number; fat: number }>();
-  for (const rep of allDailyReports) {
-    const entry = dateMap.get(rep.reportDate) || { date: rep.reportDate, pole: 0, cable: 0, fat: 0 };
-    for (const it of rep.items) {
-      if (it.workItem.category === 'POLE') entry.pole += it.quantity;
-      if (it.workItem.category === 'CABLE') entry.cable += it.quantity;
-      if (it.workItem.category === 'FAT') entry.fat += it.quantity;
-    }
-    dateMap.set(rep.reportDate, entry);
-  }
-
   const parseReportDate = (d: string) => {
     const parts = d.split('-');
     if (parts.length === 3 && isNaN(Number(parts[1]))) {
@@ -294,6 +242,90 @@ export async function getDashboardData() {
     }
     return new Date(d).getTime() || 0;
   };
+
+  const activityByClusterDate = new Map<
+    string,
+    {
+      clusterId: string;
+      cluster: { id: string; name: string };
+      reportDate: string;
+      createdAt: Date;
+      updatedAt: Date;
+      teams: Set<string>;
+      itemIds: Set<string>;
+    }
+  >();
+
+  for (const report of allDailyReports) {
+    const key = `${report.clusterId}:${report.reportDate}`;
+    const reportLatestTime =
+      report.updatedAt && report.updatedAt > report.createdAt
+        ? report.updatedAt
+        : report.createdAt;
+
+    let activity = activityByClusterDate.get(key);
+    if (!activity) {
+      activity = {
+        clusterId: report.clusterId,
+        cluster: report.cluster,
+        reportDate: report.reportDate,
+        createdAt: report.createdAt,
+        updatedAt: reportLatestTime,
+        teams: new Set<string>(),
+        itemIds: new Set<string>(),
+      };
+      activityByClusterDate.set(key, activity);
+    } else {
+      if (report.createdAt > activity.createdAt) {
+        activity.createdAt = report.createdAt;
+      }
+      if (reportLatestTime > activity.updatedAt) {
+        activity.updatedAt = reportLatestTime;
+      }
+    }
+
+    if (report.teamName?.trim()) {
+      activity.teams.add(report.teamName.trim());
+    }
+
+    for (const item of report.items) {
+      activity.itemIds.add(item.workItemId);
+      if (item.updatedAt && item.updatedAt > activity.updatedAt) {
+        activity.updatedAt = item.updatedAt;
+      }
+    }
+  }
+
+  const recentReports = Array.from(activityByClusterDate.values())
+    .sort((a, b) => {
+      const timeDiff = b.updatedAt.getTime() - a.updatedAt.getTime();
+      // If two reports were seeded within 60 seconds of each other, sort by reportDate descending
+      if (Math.abs(timeDiff) < 60_000) {
+        const dateDiff = parseReportDate(b.reportDate) - parseReportDate(a.reportDate);
+        if (dateDiff !== 0) return dateDiff;
+      }
+      return timeDiff;
+    })
+    .slice(0, 15)
+    .map((activity) => ({
+      id: `${activity.clusterId}-${activity.reportDate}`,
+      clusterId: activity.clusterId,
+      cluster: activity.cluster,
+      reportDate: activity.reportDate,
+      teamName: Array.from(activity.teams).join(', '),
+      items: Array.from(activity.itemIds, (workItemId) => ({ workItemId })),
+    }));
+
+  const dateMap = new Map<string, { date: string; pole: number; cable: number; fat: number }>();
+  for (const rep of allDailyReports) {
+    const entry = dateMap.get(rep.reportDate) || { date: rep.reportDate, pole: 0, cable: 0, fat: 0 };
+    for (const it of rep.items) {
+      if (it.workItem.category === 'POLE') entry.pole += it.quantity;
+      if (it.workItem.category === 'CABLE') entry.cable += it.quantity;
+      if (it.workItem.category === 'FAT') entry.fat += it.quantity;
+    }
+    dateMap.set(rep.reportDate, entry);
+  }
 
   const dailyTrends = Array.from(dateMap.values()).sort(
     (a, b) => parseReportDate(a.date) - parseReportDate(b.date)

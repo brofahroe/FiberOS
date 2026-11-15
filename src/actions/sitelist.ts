@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import sitelistData from '@/data/sitelist.json';
 import { calculateClusterProgress } from '@/lib/progressCalculator';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
+import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 
 export interface SitelistEntry {
   key: string;
@@ -76,6 +77,7 @@ const DEFAULT_WORK_ITEMS = [
 
 export async function getSitelistData() {
   try {
+    await ensureDatabaseRestoredFromNextcloud();
     await cleanupLegacyRawBoqItems();
 
     const dbClusters = await prisma.cluster.findMany({
@@ -415,6 +417,8 @@ export async function createOrActivateSitelistCluster(input: {
         },
       });
 
+      await backupDatabaseToNextcloud();
+
       revalidatePath('/');
       revalidatePath('/sitelist');
       revalidatePath('/clusters');
@@ -462,6 +466,8 @@ export async function createOrActivateSitelistCluster(input: {
         },
       });
     }
+
+    await backupDatabaseToNextcloud();
 
     revalidatePath('/');
     revalidatePath('/sitelist');
@@ -562,6 +568,8 @@ export async function activateAllSitelistClusters(kecamatanFilter?: string) {
       existingNames.add(site.shortName.toLowerCase());
       addedCount++;
     }
+
+    await backupDatabaseToNextcloud();
 
     revalidatePath('/');
     revalidatePath('/sitelist');
