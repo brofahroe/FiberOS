@@ -90,9 +90,11 @@ export default function DailyInputClient({
     const baseSites: SiteOption[] = [...sitelistData.sites];
     for (const c of clusters) {
       const lower = c.name.trim().toLowerCase();
+      const stripped = lower.replace(/^kel(urahan)?\.?\s+/i, '').replace(/\s+blora$/i, '').trim();
       const exists = baseSites.some(
         (s) =>
           s.shortName.toLowerCase() === lower ||
+          s.shortName.toLowerCase() === stripped ||
           s.clusterName.toLowerCase() === lower ||
           s.clusterId.toLowerCase() === lower
       );
@@ -116,7 +118,10 @@ export default function DailyInputClient({
   const clusterMap = useMemo(() => {
     const map = new Map<string, ClusterOption>();
     clusters.forEach((c) => {
-      map.set(c.name.trim().toLowerCase(), c);
+      const lower = c.name.trim().toLowerCase();
+      const stripped = lower.replace(/^kel(urahan)?\.?\s+/i, '').replace(/\s+blora$/i, '').trim();
+      map.set(lower, c);
+      map.set(stripped, c);
       map.set(c.id.toLowerCase(), c);
     });
     return map;
@@ -138,10 +143,12 @@ export default function DailyInputClient({
   const findSiteOptionForCluster = useCallback(
     (dbCluster: ClusterOption): SiteOption | null => {
       const lower = dbCluster.name.trim().toLowerCase();
+      const stripped = lower.replace(/^kel(urahan)?\.?\s+/i, '').replace(/\s+blora$/i, '').trim();
       return (
         sitelistOptions.find(
           (s) =>
             s.shortName.toLowerCase() === lower ||
+            s.shortName.toLowerCase() === stripped ||
             s.clusterName.toLowerCase() === lower ||
             s.clusterId.toLowerCase() === lower ||
             s.clusterId === dbCluster.id

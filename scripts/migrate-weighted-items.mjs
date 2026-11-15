@@ -1,9 +1,22 @@
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 
+let sitelistSites = [];
+try {
+  const sitelistPath = path.resolve('src/data/sitelist.json');
+  if (fs.existsSync(sitelistPath)) {
+    const parsed = JSON.parse(fs.readFileSync(sitelistPath, 'utf8'));
+    sitelistSites = parsed.sites || [];
+  }
+} catch (e) {
+  console.warn('Could not read sitelist.json:', e.message);
+}
+
 async function main() {
-  console.log('--- Starting Weighted Items Migration ---');
+  console.log('--- Starting Weighted Items & Sitelist Metadata Migration ---');
   
   const clusters = await prisma.cluster.findMany({
     include: {
@@ -15,6 +28,39 @@ async function main() {
 
   for (const cluster of clusters) {
     console.log(`Processing cluster: ${cluster.name}...`);
+
+    // 0. Enrich cluster with sitelist metadata (Kecamatan, Kabupaten, EMR Site Code, etc.)
+    const lowerName = cluster.name.trim().toLowerCase();
+    const strippedName = lowerName.replace(/^kel(urahan)?\.?\s+/i, '').replace(/\s+blora$/i, '').trim();
+    const matchedSite = sitelistSites.find(
+      (s) =>
+        s.shortName.toLowerCase() === lowerName ||
+        s.shortName.toLowerCase() === strippedName ||
+        s.clusterName.toLowerCase() === lowerName ||
+        s.clusterId.toLowerCase() === lowerName
+    );
+    if (matchedSite) {
+      await prisma.cluster.update({
+        where: { id: cluster.id },
+        data: {
+          code: cluster.code || matchedSite.clusterId,
+          emrSiteCode: cluster.emrSiteCode || matchedSite.emrSiteCode,
+          subfeederId: cluster.subfeederId || matchedSite.subfeederId,
+          clusterName: cluster.clusterName || matchedSite.clusterName,
+          oltName: cluster.oltName || matchedSite.oltName,
+          kecamatan: cluster.kecamatan || matchedSite.kecamatan || 'Kedungtuban',
+          kabupaten: cluster.kabupaten || matchedSite.kabupaten || 'Blora',
+        },
+      });
+    } else if (!cluster.kecamatan || !cluster.kabupaten) {
+      await prisma.cluster.update({
+        where: { id: cluster.id },
+        data: {
+          kecamatan: cluster.kecamatan || 'Kedungtuban',
+          kabupaten: cluster.kabupaten || 'Blora',
+        },
+      });
+    }
 
     // 1. Update existing items
     for (const item of cluster.workItems) {

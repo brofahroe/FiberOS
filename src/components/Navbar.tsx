@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileSpreadsheet, PlusCircle, Upload, Layers } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, PlusCircle, Upload, Layers, MapPin } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -11,6 +11,7 @@ export default function Navbar() {
     { href: '/', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/daily-input', label: 'Input Harian', icon: PlusCircle, highlight: true },
     { href: '/matrix', label: 'Matriks & Ekspor', icon: FileSpreadsheet },
+    { href: '/sitelist', label: 'Sitelist', icon: MapPin },
     { href: '/import-boq', label: 'Impor BOQ', icon: Upload },
     { href: '/clusters', label: 'Cluster & BOQ', icon: Layers },
   ];

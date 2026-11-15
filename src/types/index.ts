@@ -22,6 +22,12 @@ export interface ClusterWithProgress {
   id: string;
   name: string;
   code?: string | null;
+  emrSiteCode?: string | null;
+  subfeederId?: string | null;
+  clusterName?: string | null;
+  oltName?: string | null;
+  kecamatan?: string | null;
+  kabupaten?: string | null;
   homePasses: number;
   totalBoq: number;
   totalInstalled: number;

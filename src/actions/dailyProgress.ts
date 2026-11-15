@@ -43,11 +43,13 @@ async function resolveOrProvisionCluster(clusterIdOrCode: string) {
   cluster =
     allClusters.find((c) => {
       const cName = c.name.trim().toLowerCase();
+      const cStripped = cName.replace(/^kel(urahan)?\.?\s+/i, '').replace(/\s+blora$/i, '').trim();
       const cCode = (c.code || '').trim().toLowerCase();
-      if (cName === lower || cCode === lower) return true;
+      if (cName === lower || cStripped === lower || cCode === lower) return true;
       if (matchedSite) {
         return (
           cName === matchedSite.shortName.toLowerCase() ||
+          cStripped === matchedSite.shortName.toLowerCase() ||
           cName === matchedSite.clusterName.toLowerCase() ||
           cCode === matchedSite.clusterId.toLowerCase()
         );

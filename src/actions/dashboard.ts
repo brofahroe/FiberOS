@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import { runInitialSeed } from '@/actions/seed';
 import { calculateClusterProgress } from '@/lib/progressCalculator';
+import sitelistData from '@/data/sitelist.json';
 
 export async function getDashboardData() {
   try {
@@ -137,10 +138,24 @@ export async function getDashboardData() {
         ? 'IN_PROGRESS'
         : 'NOT_STARTED';
 
+    const lowerClusterName = cluster.name.trim().toLowerCase();
+    const matchedSite = sitelistData.sites.find(
+      (s) =>
+        s.shortName.toLowerCase() === lowerClusterName ||
+        s.clusterName.toLowerCase() === lowerClusterName ||
+        s.clusterId.toLowerCase() === lowerClusterName
+    );
+
     clustersWithProgress.push({
       id: cluster.id,
       name: cluster.name,
-      code: cluster.code,
+      code: cluster.code || matchedSite?.clusterId || null,
+      emrSiteCode: cluster.emrSiteCode || matchedSite?.emrSiteCode || null,
+      subfeederId: cluster.subfeederId || matchedSite?.subfeederId || null,
+      clusterName: cluster.clusterName || matchedSite?.clusterName || null,
+      oltName: cluster.oltName || matchedSite?.oltName || null,
+      kecamatan: cluster.kecamatan || matchedSite?.kecamatan || 'Kedungtuban',
+      kabupaten: cluster.kabupaten || matchedSite?.kabupaten || 'Blora',
       homePasses: cluster.homePasses,
       totalBoq: Math.round(clusterBoq * 10) / 10,
       totalInstalled: Math.round(clusterInstalled * 10) / 10,

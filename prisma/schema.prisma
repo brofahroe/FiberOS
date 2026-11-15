@@ -24,6 +24,12 @@ model Cluster {
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name         String
   code         String?
+  emrSiteCode  String?
+  subfeederId  String?
+  clusterName  String?
+  oltName      String?
+  kecamatan    String?
+  kabupaten    String?       @default("Blora")
   homePasses   Int           @default(0)
   workItems    WorkItem[]
   dailyReports DailyReport[]
