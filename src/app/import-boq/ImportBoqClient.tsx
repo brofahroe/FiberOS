@@ -36,6 +36,26 @@ export default function ImportBoqClient() {
   const [showRefGuide, setShowRefGuide] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const applyParsedResult = (data: ParsedBoqResult) => {
+    setResult(data);
+    setClusterName(data.clusterName);
+    setScope(data.scope || 'CLUSTER');
+    if (data.homePasses && data.homePasses > 0) {
+      setHomePasses(String(data.homePasses));
+    }
+  };
+
+  const handleScopeChange = (newScope: 'CLUSTER' | 'SUBFEEDER') => {
+    setScope(newScope);
+    if (result) {
+      const targetSheet =
+        newScope === 'SUBFEEDER' ? result.subfeederSheet : result.clusterSheet;
+      if (targetSheet && targetSheet.clusterName) {
+        setClusterName(targetSheet.clusterName);
+      }
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -51,12 +71,7 @@ export default function ImportBoqClient() {
       setParsing(false);
 
       if (res.success && res.data) {
-        setResult(res.data);
-        setClusterName(res.data.clusterName);
-        setScope(res.data.scope || 'CLUSTER');
-        if (res.data.homePasses && res.data.homePasses > 0) {
-          setHomePasses(String(res.data.homePasses));
-        }
+        applyParsedResult(res.data);
       } else {
         setMessage({ type: 'error', text: res.error || 'Gagal membaca file Excel' });
       }
@@ -69,35 +84,49 @@ export default function ImportBoqClient() {
     e.target.value = '';
   };
 
-  const handleLoadSample = async (filename: string) => {
+  const handleLoadSample = async (filename: string, preferredScope?: 'CLUSTER' | 'SUBFEEDER') => {
     setParsing(true);
     setMessage(null);
     setResult(null);
 
-    const res = await parseSampleBoqFile(filename);
+    const res = await parseSampleBoqFile(filename, preferredScope);
     setParsing(false);
 
     if (res.success && res.data) {
-      setResult(res.data);
-      setClusterName(res.data.clusterName);
-      setScope(res.data.scope || 'CLUSTER');
-      if (res.data.homePasses && res.data.homePasses > 0) {
-        setHomePasses(String(res.data.homePasses));
-      }
+      applyParsedResult(res.data);
       setMessage({ type: 'success', text: `File contoh "${filename}" berhasil dibaca!` });
     } else {
       setMessage({ type: 'error', text: res.error || 'Gagal membaca file contoh' });
     }
   };
 
-  const displayedItems: ParsedBoqItem[] = result
+  // Active sheet data dynamically switches based on selected Scope:
+  // CLUSTER -> sheet "BoQ NRO Cluster"
+  // SUBFEEDER -> sheet "BoQ NRO All Feeder"
+  const activeSheetData = result
+    ? scope === 'SUBFEEDER' && result.subfeederSheet
+      ? result.subfeederSheet
+      : scope === 'CLUSTER' && result.clusterSheet
+      ? result.clusterSheet
+      : {
+          sheetName: result.sheetName,
+          clusterName: result.clusterName,
+          homePasses: result.homePasses || 0,
+          totalItems: result.totalItems,
+          hasActiveVolume: result.items.some((i) => i.quantity > 0),
+          items: result.items,
+          allReferenceItems: result.allReferenceItems,
+        }
+    : null;
+
+  const displayedItems: ParsedBoqItem[] = activeSheetData
     ? showAllRefItems
-      ? result.allReferenceItems
-      : result.items
+      ? activeSheetData.allReferenceItems
+      : activeSheetData.items
     : [];
 
   const handleCommit = async () => {
-    if (!result || !clusterName.trim()) {
+    if (!activeSheetData || !clusterName.trim()) {
       setMessage({ type: 'error', text: 'Nama cluster harus diisi.' });
       return;
     }
@@ -109,7 +138,7 @@ export default function ImportBoqClient() {
       clusterName: clusterName.trim(),
       scope,
       homePasses: parseInt(homePasses) || 0,
-      items: result.items,
+      items: activeSheetData.items,
     });
 
     setCommitting(false);
@@ -152,7 +181,9 @@ export default function ImportBoqClient() {
             Impor Master BOQ dari File Excel
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Unggah file format APD (Cluster / Subfeeder). Sistem otomatis memfilter dan memetakan item sesuai tabel acuan{' '}
+            BOQ Cluster diambil dari sheet{' '}
+            <span className="font-semibold text-slate-700">&quot;BoQ NRO Cluster&quot;</span> dan BOQ Subfeeder diambil dari sheet{' '}
+            <span className="font-semibold text-slate-700">&quot;BoQ NRO All Feeder&quot;</span> sesuai acuan{' '}
             <span className="font-semibold text-slate-700">BOQ-list.xlsx</span>.
           </p>
         </div>
@@ -246,7 +277,7 @@ export default function ImportBoqClient() {
             Pilih File Excel BOQ (.xlsx / .xls)
           </span>
           <span className="text-xs text-slate-500 mt-1 max-w-md">
-            Mendukung format resmi APD: Sheet BoQ NRO Cluster atau BoQ NRO All Feeder (otomatis difilter sesuai tabel acuan BOQ-list.xlsx).
+            Cluster mengambil dari sheet <strong className="text-slate-700">BoQ NRO Cluster</strong> • Subfeeder mengambil dari sheet <strong className="text-slate-700">BoQ NRO All Feeder</strong>.
           </span>
           <input
             type="file"
@@ -260,7 +291,7 @@ export default function ImportBoqClient() {
         {parsing && (
           <div className="flex items-center justify-center gap-2 py-4 text-blue-600 font-semibold text-sm">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Menganalisis lembar kerja BOQ berdasarkan acuan BOQ-list.xlsx...</span>
+            <span>Menganalisis sheet BoQ NRO Cluster &amp; BoQ NRO All Feeder...</span>
           </div>
         )}
 
@@ -272,34 +303,44 @@ export default function ImportBoqClient() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => handleLoadSample('BLA000190 KELURAHAN NGRAHO BLORA_BOQ_APD(CLUSTER).xlsx')}
+              onClick={() =>
+                handleLoadSample(
+                  'BLA000190 KELURAHAN NGRAHO BLORA_BOQ_APD(CLUSTER).xlsx',
+                  'CLUSTER'
+                )
+              }
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition"
             >
               <FileText className="w-3.5 h-3.5" />
-              Contoh BOQ APD Cluster (NGRAHO)
+              Contoh BOQ APD Cluster (Sheet: BoQ NRO Cluster)
             </button>
             <button
               type="button"
-              onClick={() => handleLoadSample('BLA000190 SF-KELURAHAN NGRAHO BLORA_BOQ_APD(SUBFEEDER).xlsx')}
+              onClick={() =>
+                handleLoadSample(
+                  'BLA000190 SF-KELURAHAN NGRAHO BLORA_BOQ_APD(SUBFEEDER).xlsx',
+                  'SUBFEEDER'
+                )
+              }
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-lg text-xs font-medium border border-slate-200 transition"
             >
               <FileText className="w-3.5 h-3.5" />
-              Contoh BOQ APD Subfeeder (NGRAHO)
+              Contoh BOQ APD Subfeeder (Sheet: BoQ NRO All Feeder)
             </button>
           </div>
         </div>
       </div>
 
       {/* Preview Section */}
-      {result && (
+      {result && activeSheetData && (
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div>
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full mb-1">
-                <Check className="w-3 h-3" /> Berhasil Membaca Lembar Kerja: {result.sheetName}
+                <Check className="w-3 h-3" /> Berhasil Membaca Lembar Kerja: {activeSheetData.sheetName}
               </span>
               <h2 className="text-lg font-bold text-slate-900">
-                Preview Data BOQ Terdeteksi ({displayedItems.length} item sesuai BOQ-list.xlsx)
+                Preview Data BOQ Terdeteksi ({displayedItems.length} item dari {activeSheetData.sheetName})
               </h2>
             </div>
 
@@ -310,7 +351,7 @@ export default function ImportBoqClient() {
                 className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
               >
                 {showAllRefItems
-                  ? `Tampilkan Hanya Volume > 0 (${result.items.length})`
+                  ? `Tampilkan Hanya Volume > 0 (${activeSheetData.items.length})`
                   : `Tampilkan Semua 14 Item Acuan`}
               </button>
 
@@ -350,15 +391,19 @@ export default function ImportBoqClient() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Scope Pekerjaan
+                Scope Pekerjaan &amp; Sheet Sumber
               </label>
               <select
                 value={scope}
-                onChange={(e) => setScope(e.target.value as 'CLUSTER' | 'SUBFEEDER')}
+                onChange={(e) => handleScopeChange(e.target.value as 'CLUSTER' | 'SUBFEEDER')}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="CLUSTER">🏙️ Pekerjaan Cluster (Bobot 70%)</option>
-                <option value="SUBFEEDER">📡 Pekerjaan Subfeeder (Bobot 30%)</option>
+                <option value="CLUSTER">
+                  🏙️ Pekerjaan Cluster (Bobot 70% • Sheet: BoQ NRO Cluster)
+                </option>
+                <option value="SUBFEEDER">
+                  📡 Pekerjaan Subfeeder (Bobot 30% • Sheet: BoQ NRO All Feeder)
+                </option>
               </select>
             </div>
             <div>

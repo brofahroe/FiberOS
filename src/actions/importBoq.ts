@@ -25,6 +25,16 @@ export interface ParsedBoqItem {
   quantity: number;       // Volume BOQ dari file Excel APD
 }
 
+export interface ParsedSheetScopeData {
+  sheetName: string;
+  clusterName: string;
+  homePasses: number;
+  totalItems: number;
+  hasActiveVolume: boolean;
+  items: ParsedBoqItem[];
+  allReferenceItems: ParsedBoqItem[];
+}
+
 export interface ParsedBoqResult {
   clusterName: string;
   scope: 'CLUSTER' | 'SUBFEEDER';
@@ -34,6 +44,8 @@ export interface ParsedBoqResult {
   totalItems: number;
   items: ParsedBoqItem[];
   allReferenceItems: ParsedBoqItem[];
+  clusterSheet?: ParsedSheetScopeData;
+  subfeederSheet?: ParsedSheetScopeData;
 }
 
 function normalizeText(str: string): string {
@@ -126,28 +138,15 @@ function cleanClusterName(rawName: string): string {
   return name;
 }
 
-async function parseWorkbook(workbook: excel.WorkBook, originalFilename?: string): Promise<ParsedBoqResult> {
-  const rules = await getBoqReferenceRules();
-  const isSubfeeder =
-    (originalFilename || '').toLowerCase().includes('subfeeder') ||
-    (originalFilename || '').toLowerCase().includes('sf-');
-
-  let targetSheetName = '';
-  if (isSubfeeder) {
-    targetSheetName =
-      workbook.SheetNames.find(
-        (s: string) => s.toLowerCase().includes('all feeder') || s.toLowerCase().includes('feeder')
-      ) || '';
-  }
-  if (!targetSheetName) {
-    targetSheetName =
-      workbook.SheetNames.find((s: string) => s.toLowerCase().includes('cluster')) ||
-      workbook.SheetNames.find((s: string) => s.toLowerCase().includes('boq')) ||
-      workbook.SheetNames[0];
-  }
-
-  const sheet = workbook.Sheets[targetSheetName];
-  const rows = excel.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+function parseSingleSheet(
+  workbook: excel.WorkBook,
+  sheetName: string,
+  rules: BoqReferenceRule[],
+  isSubfeeder: boolean,
+  originalFilename?: string
+): ParsedSheetScopeData {
+  const sheet = workbook.Sheets[sheetName];
+  const rows = sheet ? (excel.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][]) : [];
 
   let clusterName = '';
   let detectedHp = 0;
@@ -183,7 +182,6 @@ async function parseWorkbook(workbook: excel.WorkBook, originalFilename?: string
     clusterName || (isSubfeeder ? 'SUBFEEDER BARU' : 'CLUSTER BARU')
   );
 
-  // Map each rule from BOQ-list.xlsx to its detected quantity in the sheet
   const ruleQuantities = new Map<number, { qty: number; matchedDesc: string }>();
 
   for (let r = 5; r < rows.length; r++) {
@@ -245,24 +243,94 @@ async function parseWorkbook(workbook: excel.WorkBook, originalFilename?: string
   const parsedItems = activeItems.length > 0 ? activeItems : allReferenceItems;
 
   return {
+    sheetName,
     clusterName: cleanedName,
-    scope: isSubfeeder ? 'SUBFEEDER' : 'CLUSTER',
     homePasses: detectedHp,
-    sheetName: targetSheetName,
     totalItems: parsedItems.length,
+    hasActiveVolume: activeItems.length > 0,
     items: parsedItems,
     allReferenceItems,
   };
 }
 
+async function parseWorkbook(
+  workbook: excel.WorkBook,
+  originalFilename?: string,
+  preferredScope?: 'CLUSTER' | 'SUBFEEDER'
+): Promise<ParsedBoqResult> {
+  const rules = await getBoqReferenceRules();
+
+  // Find "BoQ NRO Cluster" sheet for CLUSTER
+  const clusterSheetName =
+    workbook.SheetNames.find((s) => s.trim().toLowerCase() === 'boq nro cluster') ||
+    workbook.SheetNames.find((s) => s.toLowerCase().includes('cluster')) ||
+    workbook.SheetNames.find((s) => s.toLowerCase().includes('boq')) ||
+    workbook.SheetNames[0];
+
+  // Find "BoQ NRO All Feeder" sheet for SUBFEEDER
+  const subfeederSheetName =
+    workbook.SheetNames.find((s) => s.trim().toLowerCase() === 'boq nro all feeder') ||
+    workbook.SheetNames.find((s) => s.toLowerCase().includes('all feeder')) ||
+    workbook.SheetNames.find((s) => s.toLowerCase().includes('feeder')) ||
+    clusterSheetName;
+
+  const clusterSheet = parseSingleSheet(
+    workbook,
+    clusterSheetName,
+    rules,
+    false,
+    originalFilename
+  );
+
+  const subfeederSheet = parseSingleSheet(
+    workbook,
+    subfeederSheetName,
+    rules,
+    true,
+    originalFilename
+  );
+
+  const filenameIndicatesSubfeeder =
+    (originalFilename || '').toLowerCase().includes('subfeeder') ||
+    (originalFilename || '').toLowerCase().includes('sf-');
+
+  // Determine initial scope:
+  // 1. If preferredScope is explicitly provided by user in UI, use it
+  // 2. Otherwise if filename indicates subfeeder, use SUBFEEDER ("BoQ NRO All Feeder")
+  // 3. Otherwise if "BoQ NRO All Feeder" has active items (>0) and "BoQ NRO Cluster" has 0 active items, use SUBFEEDER
+  let activeScope: 'CLUSTER' | 'SUBFEEDER' = 'CLUSTER';
+  if (preferredScope) {
+    activeScope = preferredScope;
+  } else if (filenameIndicatesSubfeeder) {
+    activeScope = 'SUBFEEDER';
+  } else if (subfeederSheet.hasActiveVolume && !clusterSheet.hasActiveVolume) {
+    activeScope = 'SUBFEEDER';
+  }
+
+  const chosen = activeScope === 'SUBFEEDER' ? subfeederSheet : clusterSheet;
+
+  return {
+    clusterName: chosen.clusterName || clusterSheet.clusterName,
+    scope: activeScope,
+    homePasses: chosen.homePasses || clusterSheet.homePasses,
+    sheetName: chosen.sheetName,
+    totalItems: chosen.totalItems,
+    items: chosen.items,
+    allReferenceItems: chosen.allReferenceItems,
+    clusterSheet,
+    subfeederSheet,
+  };
+}
+
 export async function parseBoqExcel(
   base64Data: string,
-  originalFilename?: string
+  originalFilename?: string,
+  preferredScope?: 'CLUSTER' | 'SUBFEEDER'
 ): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
     const buffer = Buffer.from(base64Data, 'base64');
     const workbook = excel.read(buffer, { type: 'buffer' });
-    const result = await parseWorkbook(workbook, originalFilename);
+    const result = await parseWorkbook(workbook, originalFilename, preferredScope);
     return { success: true, data: result };
   } catch (err: unknown) {
     console.error('Error parsing BOQ Excel:', err);
@@ -272,7 +340,8 @@ export async function parseBoqExcel(
 }
 
 export async function parseSampleBoqFile(
-  filename: string
+  filename: string,
+  preferredScope?: 'CLUSTER' | 'SUBFEEDER'
 ): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
     const filePath = path.resolve(filename);
@@ -281,7 +350,7 @@ export async function parseSampleBoqFile(
     }
     const buffer = fs.readFileSync(filePath);
     const workbook = excel.read(buffer, { type: 'buffer' });
-    const result = await parseWorkbook(workbook, filename);
+    const result = await parseWorkbook(workbook, filename, preferredScope);
     return { success: true, data: result };
   } catch (err: unknown) {
     console.error('Error reading sample BOQ file:', err);
@@ -460,7 +529,7 @@ export async function commitBoqImport(data: {
 
     return {
       success: true,
-      message: `Berhasil mengimpor BOQ (${scope === 'SUBFEEDER' ? 'Subfeeder 30%' : 'Cluster 70%'}) untuk cluster "${cluster.name}" dengan ${itemsToSave.length} item BOQ standar!`,
+      message: `Berhasil mengimpor BOQ (${scope === 'SUBFEEDER' ? 'Subfeeder 30% - BoQ NRO All Feeder' : 'Cluster 70% - BoQ NRO Cluster'}) untuk cluster "${cluster.name}" dengan ${itemsToSave.length} item BOQ standar!`,
     };
   } catch (err: unknown) {
     console.error('Error committing BOQ import:', err);
