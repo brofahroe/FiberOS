@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getClusterItemsForForm, submitDailyProgress, getDailyReportTeams, getExistingDailyReport, deleteDailyReportByDate } from '@/actions/dailyProgress';
 import { compressImage } from '@/lib/imageCompression';
 import { 
   Building2, 
   Calendar, 
+  ChevronLeft,
+  ChevronRight,
   User, 
   Users, 
   Camera, 
@@ -27,6 +29,55 @@ import {
 import WhatsAppReportModal from '@/components/WhatsAppReportModal';
 import { SearchableDropdown } from '@/components/SearchableDropdown/SearchableDropdown';
 import sitelistData from '@/data/sitelist.json';
+
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_FULL_ID = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+];
+const DAYS_SHORT_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+function formatDateDdMmmYy(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mmm = MONTHS_SHORT[date.getMonth()];
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${dd}-${mmm}-${yy}`;
+}
+
+function parseDdMmmYy(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  const trimmed = dateStr.trim();
+  const parts = trimmed.split('-');
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const day = parseInt(parts[0], 10);
+    const monthIdx = MONTHS_SHORT.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase());
+    const yearRaw = parseInt(parts[2], 10);
+    const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
+    if (!isNaN(day) && monthIdx >= 0 && !isNaN(year)) {
+      return new Date(year, monthIdx, day);
+    }
+  }
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    if (!isNaN(day) && monthIdx >= 0 && !isNaN(year)) {
+      return new Date(year, monthIdx, day);
+    }
+  }
+  const parsed = new Date(trimmed);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+}
 
 interface ClusterOption {
   id: string;
@@ -73,17 +124,75 @@ export default function DailyInputClient({
   // Header form states
   const [selectedClusterId, setSelectedClusterId] = useState<string>(initialClusterId || clusters[0]?.id || '');
   const [reportDate, setReportDate] = useState<string>(() => {
-    if (initialDate) return initialDate;
-    const today = new Date();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${today.getDate()}-${months[today.getMonth()]}-${today.getFullYear().toString().slice(-2)}`;
+    if (initialDate) {
+      return formatDateDdMmmYy(parseDdMmmYy(initialDate));
+    }
+    return formatDateDdMmmYy(new Date());
   });
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
+  const [pickerViewDate, setPickerViewDate] = useState<Date>(() =>
+    initialDate ? parseDdMmmYy(initialDate) : new Date()
+  );
+  const datePickerRef = useRef<HTMLDivElement | null>(null);
   const [reporterName, setReporterName] = useState<string>('');
   const [teamName, setTeamName] = useState<string>('');
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
   const [teamListError, setTeamListError] = useState<string | null>(null);
   const [weather, setWeather] = useState<string>('Cerah');
   const [notes, setNotes] = useState<string>('');
+
+  // Close date picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
+      }
+    };
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDatePicker]);
+
+  const selectedDateObj = useMemo(() => parseDdMmmYy(reportDate), [reportDate]);
+
+  const calendarDays = useMemo(() => {
+    const year = pickerViewDate.getFullYear();
+    const month = pickerViewDate.getMonth();
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    const cells: Array<{ date: Date; isCurrentMonth: boolean }> = [];
+    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+      cells.push({
+        date: new Date(year, month - 1, daysInPrevMonth - i),
+        isCurrentMonth: false,
+      });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({
+        date: new Date(year, month, d),
+        isCurrentMonth: true,
+      });
+    }
+    const remaining = 42 - cells.length;
+    for (let d = 1; d <= remaining; d++) {
+      cells.push({
+        date: new Date(year, month + 1, d),
+        isCurrentMonth: false,
+      });
+    }
+    return cells;
+  }, [pickerViewDate]);
+
+  const handleSelectDate = (date: Date) => {
+    setReportDate(formatDateDdMmmYy(date));
+    setPickerViewDate(new Date(date.getFullYear(), date.getMonth(), 1));
+    setShowDatePicker(false);
+  };
 
   // Sitelist dropdown state (merge official sitelist with any custom DB clusters)
   const sitelistOptions: SiteOption[] = useMemo(() => {
@@ -544,22 +653,187 @@ export default function DailyInputClient({
             />
           </div>
 
-          {/* Report Date */}
-          <div>
+          {/* Report Date (dd-mmm-yy with Date Picker) */}
+          <div ref={datePickerRef} className="relative">
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Tanggal Pekerjaan <span className="text-rose-500">*</span>
+              <span className="ml-1.5 text-[10px] font-normal text-slate-400">(dd-mmm-yy)</span>
             </label>
             <div className="relative">
               <input
                 type="text"
+                readOnly
                 value={reportDate}
-                onChange={(e) => setReportDate(e.target.value)}
-                placeholder="Contoh: 12-Nov-26"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                onClick={() => {
+                  setPickerViewDate(parseDdMmmYy(reportDate));
+                  setShowDatePicker((prev) => !prev);
+                }}
+                placeholder="Contoh: 15-Nov-26"
+                className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 hover:bg-slate-100/80 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
                 required
               />
-              <Calendar className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+              <button
+                type="button"
+                onClick={() => {
+                  setPickerViewDate(parseDdMmmYy(reportDate));
+                  setShowDatePicker((prev) => !prev);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition"
+                title="Pilih Tanggal dari Kalender"
+              >
+                <Calendar className="w-4 h-4" />
+              </button>
             </div>
+
+            {showDatePicker && (
+              <div className="absolute right-0 sm:left-0 z-50 mt-2 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 animate-in fade-in zoom-in-95 duration-150">
+                {/* Month & Year Navigation Header */}
+                <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPickerViewDate(
+                        new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth() - 1, 1)
+                      )
+                    }
+                    className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition"
+                    title="Bulan Sebelumnya"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={pickerViewDate.getMonth()}
+                      onChange={(e) =>
+                        setPickerViewDate(
+                          new Date(pickerViewDate.getFullYear(), parseInt(e.target.value, 10), 1)
+                        )
+                      }
+                      className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {MONTHS_FULL_ID.map((mName, idx) => (
+                        <option key={mName} value={idx}>
+                          {mName}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={pickerViewDate.getFullYear()}
+                      onChange={(e) =>
+                        setPickerViewDate(
+                          new Date(parseInt(e.target.value, 10), pickerViewDate.getMonth(), 1)
+                        )
+                      }
+                      className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {[2024, 2025, 2026, 2027, 2028].map((yr) => (
+                        <option key={yr} value={yr}>
+                          {yr}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPickerViewDate(
+                        new Date(pickerViewDate.getFullYear(), pickerViewDate.getMonth() + 1, 1)
+                      )
+                    }
+                    className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-blue-600 transition"
+                    title="Bulan Berikutnya"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Days of Week Header */}
+                <div className="grid grid-cols-7 gap-1 mb-1.5 text-center">
+                  {DAYS_SHORT_ID.map((dName, i) => (
+                    <span
+                      key={dName}
+                      className={`text-[10px] font-extrabold uppercase ${
+                        i === 0 ? 'text-rose-500' : 'text-slate-400'
+                      }`}
+                    >
+                      {dName}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Calendar Dates Grid */}
+                <div className="grid grid-cols-7 gap-1">
+                  {calendarDays.map((cell, idx) => {
+                    const cellStr = formatDateDdMmmYy(cell.date);
+                    const isSelected =
+                      cell.date.getDate() === selectedDateObj.getDate() &&
+                      cell.date.getMonth() === selectedDateObj.getMonth() &&
+                      cell.date.getFullYear() === selectedDateObj.getFullYear();
+
+                    const today = new Date();
+                    const isToday =
+                      cell.date.getDate() === today.getDate() &&
+                      cell.date.getMonth() === today.getMonth() &&
+                      cell.date.getFullYear() === today.getFullYear();
+
+                    return (
+                      <button
+                        key={`${cellStr}-${idx}`}
+                        type="button"
+                        onClick={() => handleSelectDate(cell.date)}
+                        className={`h-8 rounded-lg text-xs font-bold transition flex items-center justify-center ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30'
+                            : isToday
+                            ? 'bg-blue-50 text-blue-700 border border-blue-300'
+                            : cell.isCurrentMonth
+                            ? 'text-slate-700 hover:bg-slate-100'
+                            : 'text-slate-300 hover:bg-slate-50'
+                        }`}
+                        title={cellStr}
+                      >
+                        {cell.date.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Quick Footer Actions */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectDate(new Date())}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[11px] font-bold transition"
+                    >
+                      Hari Ini ({formatDateDdMmmYy(new Date())})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const yest = new Date();
+                        yest.setDate(yest.getDate() - 1);
+                        handleSelectDate(yest);
+                      }}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition"
+                    >
+                      Kemarin
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDatePicker(false)}
+                    className="px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Reporter Name */}

@@ -6,6 +6,44 @@ import { uploadFileToNextcloud } from '@/lib/nextcloud';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 import sitelistData from '@/data/sitelist.json';
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function normalizeToDdMmmYy(dateStr: string): string {
+  const trimmed = (dateStr || '').trim();
+  const parts = trimmed.split('-');
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const dayNum = parseInt(parts[0], 10);
+    const monthMatch = MONTHS_SHORT.find((m) => m.toLowerCase() === parts[1].toLowerCase());
+    const yr = parts[2].slice(-2);
+    if (!isNaN(dayNum) && monthMatch) {
+      return `${String(dayNum).padStart(2, '0')}-${monthMatch}-${yr}`;
+    }
+  }
+  if (parts.length === 3 && parts[0].length === 4) {
+    const year = parts[0].slice(-2);
+    const mIdx = parseInt(parts[1], 10) - 1;
+    const dayNum = parseInt(parts[2], 10);
+    if (!isNaN(dayNum) && mIdx >= 0 && mIdx < 12) {
+      return `${String(dayNum).padStart(2, '0')}-${MONTHS_SHORT[mIdx]}-${year}`;
+    }
+  }
+  return trimmed;
+}
+
+function getDateVariants(dateStr: string): string[] {
+  const canonical = normalizeToDdMmmYy(dateStr);
+  const parts = canonical.split('-');
+  if (parts.length === 3) {
+    const dayNum = parseInt(parts[0], 10);
+    if (!isNaN(dayNum)) {
+      const padded = `${String(dayNum).padStart(2, '0')}-${parts[1]}-${parts[2]}`;
+      const unpadded = `${dayNum}-${parts[1]}-${parts[2]}`;
+      return Array.from(new Set([dateStr.trim(), canonical, padded, unpadded]));
+    }
+  }
+  return Array.from(new Set([dateStr.trim(), canonical]));
+}
+
 async function resolveOrProvisionCluster(clusterIdOrCode: string) {
   if (!clusterIdOrCode) return null;
 
@@ -189,14 +227,15 @@ export async function submitDailyProgress(data: {
     const resolvedCluster = await resolveOrProvisionCluster(data.clusterId);
     const targetClusterId = resolvedCluster ? resolvedCluster.id : data.clusterId;
 
-    // Find if report already exists for this cluster, date, and team
-    const existingReport = await prisma.dailyReport.findUnique({
+    const canonicalDate = normalizeToDdMmmYy(data.reportDate);
+    const dateVariants = getDateVariants(data.reportDate);
+
+    // Find if report already exists for this cluster, date (either dd-mmm-yy or d-mmm-yy), and team
+    const existingReport = await prisma.dailyReport.findFirst({
       where: {
-        clusterId_reportDate_teamName: {
-          clusterId: targetClusterId,
-          reportDate: data.reportDate,
-          teamName,
-        },
+        clusterId: targetClusterId,
+        reportDate: { in: dateVariants },
+        teamName,
       },
       include: { items: true },
     });
@@ -272,6 +311,7 @@ export async function submitDailyProgress(data: {
       report = await prisma.dailyReport.update({
         where: { id: existingReport.id },
         data: {
+          reportDate: canonicalDate,
           reporterName: data.reporterName !== undefined ? data.reporterName : existingReport.reporterName,
           teamName,
           weather: data.weather || existingReport.weather,
@@ -289,7 +329,7 @@ export async function submitDailyProgress(data: {
       report = await prisma.dailyReport.create({
         data: {
           clusterId: targetClusterId,
-          reportDate: data.reportDate,
+          reportDate: canonicalDate,
           reporterName: data.reporterName,
           teamName,
           weather: data.weather,
@@ -345,8 +385,9 @@ export async function submitDailyProgress(data: {
 
 export async function getDailyReportTeams(clusterId: string, reportDate: string) {
   try {
+    const dateVariants = getDateVariants(reportDate);
     const reports = await prisma.dailyReport.findMany({
-      where: { clusterId, reportDate, teamName: { not: null } },
+      where: { clusterId, reportDate: { in: dateVariants }, teamName: { not: null } },
       select: { teamName: true },
       distinct: ['teamName'],
       orderBy: { teamName: 'asc' },
@@ -371,13 +412,12 @@ export async function getExistingDailyReport(clusterId: string, reportDate: stri
     const normalizedTeamName = teamName.trim();
     if (!normalizedTeamName) return { exists: false, report: null };
 
-    const report = await prisma.dailyReport.findUnique({
+    const dateVariants = getDateVariants(reportDate);
+    const report = await prisma.dailyReport.findFirst({
       where: {
-        clusterId_reportDate_teamName: {
-          clusterId,
-          reportDate,
-          teamName: normalizedTeamName,
-        },
+        clusterId,
+        reportDate: { in: dateVariants },
+        teamName: normalizedTeamName,
       },
       include: {
         items: true,
@@ -504,13 +544,12 @@ export async function deleteDailyReportByDate(clusterId: string, reportDate: str
       return { success: false, error: 'Nama Tim Pelaksana wajib diisi untuk menghapus laporan.' };
     }
 
-    const report = await prisma.dailyReport.findUnique({
+    const dateVariants = getDateVariants(reportDate);
+    const report = await prisma.dailyReport.findFirst({
       where: {
-        clusterId_reportDate_teamName: {
-          clusterId,
-          reportDate,
-          teamName: normalizedTeamName,
-        },
+        clusterId,
+        reportDate: { in: dateVariants },
+        teamName: normalizedTeamName,
       },
     });
 

@@ -60,7 +60,11 @@ function normalizeDateStr(d: string): string {
     const [yyyy, mm, dd] = d.split('-');
     const mIdx = parseInt(mm, 10) - 1;
     const day = parseInt(dd, 10);
-    return `${day}-${months[mIdx]}-${yyyy.slice(-2)}`.toLowerCase();
+    return `${String(day).padStart(2, '0')}-${months[mIdx]}-${yyyy.slice(-2)}`.toLowerCase();
+  }
+  const parts = d.trim().split('-');
+  if (parts.length === 3 && !isNaN(parseInt(parts[0], 10))) {
+    return `${String(parseInt(parts[0], 10)).padStart(2, '0')}-${parts[1]}-${parts[2].slice(-2)}`.toLowerCase();
   }
   return d.trim().toLowerCase();
 }
