@@ -7,6 +7,12 @@
   --foreground: #0f172a;
 }
 
+html.dark {
+  color-scheme: dark;
+  --background: #020617;
+  --foreground: #f1f5f9;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
@@ -30,6 +36,16 @@ body {
   background: #94a3b8;
 }
 
+html.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
 /* Enhanced table scrollbars for wide matrix navigation */
 .table-scrollbar::-webkit-scrollbar {
   height: 10px;
@@ -47,3 +63,260 @@ body {
   background: #64748b;
 }
 
+html.dark .table-scrollbar::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+html.dark .table-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border: 2px solid #0f172a;
+}
+html.dark .table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* ============================================================================
+   Global Dark Theme Semantic Surface & Typography Overrides (:where keeps
+   zero extra specificity so explicit `dark:*` utilities always win)
+   ============================================================================ */
+
+/* Light surfaces -> Dark Slate */
+:where(html.dark) .bg-white {
+  background-color: #0f172a;
+}
+:where(html.dark) .bg-white\/95 {
+  background-color: rgba(15, 23, 42, 0.95);
+}
+:where(html.dark) .bg-white\/90 {
+  background-color: rgba(15, 23, 42, 0.9);
+}
+:where(html.dark) .bg-slate-50 {
+  background-color: #1e293b;
+}
+:where(html.dark) .bg-slate-50\/50,
+:where(html.dark) .bg-slate-50\/70,
+:where(html.dark) .bg-slate-50\/80 {
+  background-color: rgba(30, 41, 59, 0.65);
+}
+:where(html.dark) .bg-slate-100 {
+  background-color: #1e293b;
+}
+:where(html.dark) .bg-slate-100\/70,
+:where(html.dark) .bg-slate-100\/80 {
+  background-color: rgba(30, 41, 59, 0.85);
+}
+:where(html.dark) .bg-slate-200 {
+  background-color: #334155;
+}
+:where(html.dark) .bg-slate-200\/70 {
+  background-color: rgba(51, 65, 85, 0.7);
+}
+
+/* Borders & dividers */
+:where(html.dark) .border-slate-100 {
+  border-color: #1e293b;
+}
+:where(html.dark) .border-slate-200 {
+  border-color: #334155;
+}
+:where(html.dark) .border-slate-300 {
+  border-color: #475569;
+}
+:where(html.dark) .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b;
+}
+:where(html.dark) .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155;
+}
+
+/* Slate typography */
+:where(html.dark) .text-slate-950,
+:where(html.dark) .text-slate-900 {
+  color: #f8fafc;
+}
+:where(html.dark) .text-slate-800 {
+  color: #e2e8f0;
+}
+:where(html.dark) .text-slate-700 {
+  color: #cbd5e1;
+}
+:where(html.dark) .text-slate-600 {
+  color: #94a3b8;
+}
+:where(html.dark) .text-slate-500 {
+  color: #94a3b8;
+}
+:where(html.dark) .text-slate-400 {
+  color: #64748b;
+}
+:where(html.dark) .text-slate-300 {
+  color: #cbd5e1;
+}
+
+/* Hover surface transitions */
+:where(html.dark) .hover\:bg-slate-50:hover,
+:where(html.dark) .hover\:bg-slate-50\/80:hover,
+:where(html.dark) .group:hover .group-hover\:bg-slate-50 {
+  background-color: #1e293b;
+}
+:where(html.dark) .hover\:bg-slate-100:hover,
+:where(html.dark) .hover\:bg-slate-100\/80:hover {
+  background-color: #334155;
+}
+:where(html.dark) .hover\:bg-slate-200:hover,
+:where(html.dark) .hover\:bg-slate-200\/70:hover,
+:where(html.dark) .hover\:bg-slate-300:hover {
+  background-color: #475569;
+}
+:where(html.dark) .hover\:text-slate-900:hover,
+:where(html.dark) .hover\:text-slate-800:hover {
+  color: #f8fafc;
+}
+:where(html.dark) .hover\:text-slate-700:hover {
+  color: #e2e8f0;
+}
+
+/* Blue tinted badges, alerts, buttons */
+:where(html.dark) .bg-blue-50,
+:where(html.dark) .bg-blue-50\/50,
+:where(html.dark) .bg-blue-50\/70,
+:where(html.dark) .bg-blue-50\/80 {
+  background-color: rgba(37, 99, 235, 0.16);
+}
+:where(html.dark) .bg-blue-100 {
+  background-color: rgba(37, 99, 235, 0.25);
+}
+:where(html.dark) .border-blue-100,
+:where(html.dark) .border-blue-200,
+:where(html.dark) .border-blue-300 {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+:where(html.dark) .text-blue-600 {
+  color: #60a5fa;
+}
+:where(html.dark) .text-blue-700,
+:where(html.dark) .text-blue-800,
+:where(html.dark) .text-blue-900 {
+  color: #93c5fd;
+}
+:where(html.dark) .hover\:bg-blue-50:hover,
+:where(html.dark) .hover\:bg-blue-100:hover {
+  background-color: rgba(37, 99, 235, 0.28);
+}
+
+/* Indigo tinted badges & alerts */
+:where(html.dark) .bg-indigo-50,
+:where(html.dark) .bg-indigo-100 {
+  background-color: rgba(99, 102, 241, 0.2);
+}
+:where(html.dark) .border-indigo-100,
+:where(html.dark) .border-indigo-200,
+:where(html.dark) .border-indigo-200\/80 {
+  border-color: rgba(129, 140, 248, 0.35);
+}
+:where(html.dark) .text-indigo-600 {
+  color: #818cf8;
+}
+:where(html.dark) .text-indigo-700,
+:where(html.dark) .text-indigo-800 {
+  color: #a5b4fc;
+}
+:where(html.dark) .hover\:bg-indigo-50:hover,
+:where(html.dark) .hover\:bg-indigo-100:hover {
+  background-color: rgba(99, 102, 241, 0.32);
+}
+
+/* Emerald tinted badges & alerts */
+:where(html.dark) .bg-emerald-50,
+:where(html.dark) .bg-emerald-50\/70,
+:where(html.dark) .bg-emerald-50\/80,
+:where(html.dark) .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.16);
+}
+:where(html.dark) .border-emerald-200,
+:where(html.dark) .border-emerald-200\/90,
+:where(html.dark) .border-emerald-300 {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+:where(html.dark) .text-emerald-600 {
+  color: #34d399;
+}
+:where(html.dark) .text-emerald-700,
+:where(html.dark) .text-emerald-800,
+:where(html.dark) .text-emerald-950 {
+  color: #6ee7b7;
+}
+
+/* Amber tinted badges & alerts */
+:where(html.dark) .bg-amber-50,
+:where(html.dark) .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16);
+}
+:where(html.dark) .border-amber-200,
+:where(html.dark) .border-amber-200\/80,
+:where(html.dark) .border-amber-300 {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+:where(html.dark) .text-amber-600 {
+  color: #fbbf24;
+}
+:where(html.dark) .text-amber-700,
+:where(html.dark) .text-amber-800,
+:where(html.dark) .text-amber-900,
+:where(html.dark) .text-amber-950 {
+  color: #fcd34d;
+}
+:where(html.dark) .hover\:bg-amber-50:hover,
+:where(html.dark) .hover\:bg-amber-100:hover {
+  background-color: rgba(245, 158, 11, 0.25);
+}
+
+/* Purple tinted badges & alerts */
+:where(html.dark) .bg-purple-50,
+:where(html.dark) .bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.18);
+}
+:where(html.dark) .border-purple-200 {
+  border-color: rgba(192, 132, 252, 0.35);
+}
+:where(html.dark) .text-purple-600 {
+  color: #c084fc;
+}
+:where(html.dark) .text-purple-700,
+:where(html.dark) .text-purple-800 {
+  color: #d8b4fe;
+}
+
+/* Rose tinted badges & alerts */
+:where(html.dark) .bg-rose-50,
+:where(html.dark) .bg-rose-100 {
+  background-color: rgba(244, 63, 94, 0.16);
+}
+:where(html.dark) .border-rose-200 {
+  border-color: rgba(251, 113, 133, 0.35);
+}
+:where(html.dark) .text-rose-600 {
+  color: #fb7185;
+}
+:where(html.dark) .text-rose-700,
+:where(html.dark) .text-rose-800 {
+  color: #fda4af;
+}
+
+/* Sky tinted pills */
+:where(html.dark) .bg-sky-50,
+:where(html.dark) .bg-sky-100 {
+  background-color: rgba(14, 165, 233, 0.18);
+}
+:where(html.dark) .border-sky-200 {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+:where(html.dark) .text-sky-700,
+:where(html.dark) .text-sky-800 {
+  color: #7dd3fc;
+}
+
+/* Inputs & placeholders in dark mode */
+:where(html.dark) input::placeholder,
+:where(html.dark) textarea::placeholder {
+  color: #64748b;
+}

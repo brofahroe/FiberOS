@@ -61,7 +61,7 @@ export default async function DashboardPage() {
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href="/daily-input"
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-blue-700 font-bold text-sm rounded-xl shadow-lg hover:bg-blue-50 transition transform hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 text-blue-700 dark:text-sky-300 dark:border dark:border-white/20 font-bold text-sm rounded-xl shadow-lg hover:bg-blue-50 dark:hover:bg-slate-800 transition transform hover:-translate-y-0.5"
             >
               <PlusCircle className="w-4 h-4 text-blue-600" />
               Input Progress Harian
