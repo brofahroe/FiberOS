@@ -89,6 +89,7 @@ async function main() {
             oltName: cl.oltName,
             kecamatan: cl.kecamatan,
             kabupaten: cl.kabupaten || 'Blora',
+            startImpleDate: cl.startImpleDate ?? null,
             homePasses: cl.homePasses ?? 0,
           },
           create: {
@@ -102,6 +103,7 @@ async function main() {
             oltName: cl.oltName,
             kecamatan: cl.kecamatan,
             kabupaten: cl.kabupaten || 'Blora',
+            startImpleDate: cl.startImpleDate ?? null,
             homePasses: cl.homePasses ?? 0,
             createdAt: cl.createdAt ? new Date(cl.createdAt) : undefined,
           },

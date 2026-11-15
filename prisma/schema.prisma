@@ -27,10 +27,11 @@ model Cluster {
   emrSiteCode  String?
   subfeederId  String?
   clusterName  String?
-  oltName      String?
-  kecamatan    String?
-  kabupaten    String?       @default("Blora")
-  homePasses   Int           @default(0)
+  oltName        String?
+  kecamatan      String?
+  kabupaten      String?       @default("Blora")
+  startImpleDate String?
+  homePasses     Int           @default(0)
   workItems    WorkItem[]
   dailyReports DailyReport[]
   createdAt    DateTime      @default(now())

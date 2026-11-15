@@ -257,6 +257,7 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
             oltName: cl.oltName,
             kecamatan: cl.kecamatan,
             kabupaten: cl.kabupaten || 'Blora',
+            startImpleDate: cl.startImpleDate ?? null,
             homePasses: cl.homePasses ?? 0,
           },
           create: {
@@ -270,6 +271,7 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
             oltName: cl.oltName,
             kecamatan: cl.kecamatan,
             kabupaten: cl.kabupaten || 'Blora',
+            startImpleDate: cl.startImpleDate ?? null,
             homePasses: cl.homePasses ?? 0,
             createdAt: cl.createdAt ? new Date(cl.createdAt) : undefined,
           },

@@ -5,7 +5,12 @@ import { revalidatePath } from 'next/cache';
 import sitelistData from '@/data/sitelist.json';
 import { calculateClusterProgress } from '@/lib/progressCalculator';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
-import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
+import {
+  backupDatabaseToNextcloud,
+  ensureDatabaseRestoredFromNextcloud,
+  formatCanonicalReportDate,
+  parseReportDateMs,
+} from '@/lib/dbSync';
 
 export interface SitelistEntry {
   key: string;
@@ -19,6 +24,7 @@ export interface SitelistEntry {
   oltName: string;
   kecamatan: string;
   kabupaten: string;
+  startImpleDate: string;
   homePasses: number;
   percentage: number;
   clrPercentage: number;
@@ -87,9 +93,28 @@ export async function getSitelistData() {
             progressList: true,
           },
         },
+        dailyReports: {
+          select: {
+            reportDate: true,
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });
+
+    const resolveStartImpleDate = (c: (typeof dbClusters)[number], fallbackSiteDate?: string): string => {
+      if (c.startImpleDate && c.startImpleDate.trim()) {
+        return formatCanonicalReportDate(c.startImpleDate.trim());
+      }
+      if (c.dailyReports && c.dailyReports.length > 0) {
+        const sorted = [...c.dailyReports].sort(
+          (a, b) => parseReportDateMs(a.reportDate) - parseReportDateMs(b.reportDate)
+        );
+        const earliest = sorted[0]?.reportDate;
+        if (earliest) return formatCanonicalReportDate(earliest);
+      }
+      return fallbackSiteDate ? formatCanonicalReportDate(fallbackSiteDate) : '';
+    };
 
     // Backfill any existing DB cluster that doesn't have kecamatan/kabupaten yet
     for (const c of dbClusters) {
@@ -213,6 +238,7 @@ export async function getSitelistData() {
       if (dbMatch) {
         matchedDbIds.add(dbMatch.id);
         const stats = computeClusterStats(dbMatch);
+        const siteDefaultDate = (site as { startImpleDate?: string }).startImpleDate;
         entries.push({
           key: site.clusterId,
           dbClusterId: dbMatch.id,
@@ -225,10 +251,12 @@ export async function getSitelistData() {
           oltName: dbMatch.oltName || site.oltName,
           kecamatan: dbMatch.kecamatan || site.kecamatan || 'Kedungtuban',
           kabupaten: dbMatch.kabupaten || site.kabupaten || 'Blora',
+          startImpleDate: resolveStartImpleDate(dbMatch, siteDefaultDate),
           homePasses: dbMatch.homePasses || 0,
           ...stats,
         });
       } else {
+        const siteDefaultDate = (site as { startImpleDate?: string }).startImpleDate;
         entries.push({
           key: site.clusterId,
           dbClusterId: null,
@@ -241,6 +269,7 @@ export async function getSitelistData() {
           oltName: site.oltName,
           kecamatan: site.kecamatan || 'Kedungtuban',
           kabupaten: site.kabupaten || 'Blora',
+          startImpleDate: siteDefaultDate ? formatCanonicalReportDate(siteDefaultDate) : '',
           homePasses: 0,
           percentage: 0,
           clrPercentage: 0,
@@ -274,6 +303,7 @@ export async function getSitelistData() {
         oltName: c.oltName || 'OLT Balun',
         kecamatan: c.kecamatan || 'Kedungtuban',
         kabupaten: c.kabupaten || 'Blora',
+        startImpleDate: resolveStartImpleDate(c),
         homePasses: c.homePasses || 0,
         ...stats,
       });
@@ -374,6 +404,7 @@ export async function createOrActivateSitelistCluster(input: {
   oltName: string;
   kecamatan: string;
   kabupaten: string;
+  startImpleDate?: string;
   homePasses?: number;
   isActive?: boolean;
 }) {
@@ -430,6 +461,11 @@ export async function createOrActivateSitelistCluster(input: {
       };
     }
 
+    const formattedStartDate =
+      input.startImpleDate && input.startImpleDate.trim()
+        ? formatCanonicalReportDate(input.startImpleDate.trim())
+        : null;
+
     if (existing) {
       // Update metadata if already exists
       const updated = await prisma.cluster.update({
@@ -443,6 +479,7 @@ export async function createOrActivateSitelistCluster(input: {
           oltName: input.oltName.trim() || existing.oltName,
           kecamatan: input.kecamatan.trim() || existing.kecamatan || 'Kedungtuban',
           kabupaten: input.kabupaten.trim() || existing.kabupaten || 'Blora',
+          startImpleDate: input.startImpleDate !== undefined ? formattedStartDate : existing.startImpleDate,
           homePasses: input.homePasses !== undefined ? input.homePasses : existing.homePasses,
         },
       });
@@ -474,6 +511,7 @@ export async function createOrActivateSitelistCluster(input: {
         oltName: input.oltName.trim() || 'OLT Balun',
         kecamatan: input.kecamatan.trim() || 'Kedungtuban',
         kabupaten: input.kabupaten.trim() || 'Blora',
+        startImpleDate: formattedStartDate,
         homePasses: input.homePasses || 0,
       },
     });

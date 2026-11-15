@@ -75,8 +75,17 @@ export default function SitelistClient({
   const [formOltName, setFormOltName] = useState<string>('OLT Balun');
   const [formKecamatan, setFormKecamatan] = useState<string>('Kedungtuban');
   const [formKabupaten, setFormKabupaten] = useState<string>('Blora');
+  const [formStartImpleDate, setFormStartImpleDate] = useState<string>('');
   const [formHomePasses, setFormHomePasses] = useState<string>('0');
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
+
+  const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const toDdMmmYyFromIso = (iso: string) => {
+    const [yyyy, mm, dd] = iso.split('-');
+    const mIdx = parseInt(mm, 10) - 1;
+    if (!yyyy || isNaN(mIdx) || mIdx < 0 || mIdx > 11) return iso;
+    return `${dd.padStart(2, '0')}-${MONTHS_SHORT[mIdx]}-${yyyy.slice(-2)}`;
+  };
 
   // Filtered entries for table & dynamic KPI summary
   const filteredEntries = useMemo(() => {
@@ -158,6 +167,7 @@ export default function SitelistClient({
     setFormOltName('OLT Balun');
     setFormKecamatan(selectedKecamatan !== 'ALL' ? selectedKecamatan : 'Kedungtuban');
     setFormKabupaten(selectedKabupaten !== 'ALL' ? selectedKabupaten : 'Blora');
+    setFormStartImpleDate('');
     setFormHomePasses('0');
     setFormIsActive(true);
     setShowAddModal(true);
@@ -174,6 +184,7 @@ export default function SitelistClient({
     setFormOltName(entry.oltName);
     setFormKecamatan(entry.kecamatan);
     setFormKabupaten(entry.kabupaten);
+    setFormStartImpleDate(entry.startImpleDate || '');
     setFormHomePasses(String(entry.homePasses || 0));
     setFormIsActive(entry.isProvisioned);
     setShowAddModal(true);
@@ -220,6 +231,7 @@ export default function SitelistClient({
       oltName: entry.oltName,
       kecamatan: entry.kecamatan,
       kabupaten: entry.kabupaten,
+      startImpleDate: entry.startImpleDate || '',
       homePasses: entry.homePasses,
     });
     setActivatingKey(null);
@@ -271,6 +283,7 @@ export default function SitelistClient({
       oltName: formOltName.trim() || 'OLT Balun',
       kecamatan: formKecamatan.trim() || 'Kedungtuban',
       kabupaten: formKabupaten.trim() || 'Blora',
+      startImpleDate: formStartImpleDate.trim(),
       homePasses: parseInt(formHomePasses, 10) || 0,
       isActive: isEditingExisting ? formIsActive : true,
     });
@@ -740,22 +753,23 @@ export default function SitelistClient({
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
               <tr>
-                <th className="px-2.5 py-3 text-center w-9">No</th>
-                <th className="px-2.5 py-3 whitespace-nowrap">EMR Site Code</th>
-                <th className="px-2.5 py-3 whitespace-nowrap">Subfeeder ID</th>
-                <th className="px-2.5 py-3 whitespace-nowrap">Cluster ID</th>
-                <th className="px-2.5 py-3">Cluster Name</th>
-                <th className="px-2.5 py-3 whitespace-nowrap">Short Name</th>
-                <th className="px-2.5 py-3 whitespace-nowrap">OLT Name</th>
-                <th className="px-2.5 py-3 whitespace-nowrap">Kecamatan</th>
-                <th className="px-2.5 py-3 text-center whitespace-nowrap">Progres</th>
-                <th className="px-2.5 py-3 text-right whitespace-nowrap">Aksi / Navigasi</th>
+                <th className="px-2 py-3 text-center w-9">No</th>
+                <th className="px-2 py-3 whitespace-nowrap">EMR Site Code</th>
+                <th className="px-2 py-3 whitespace-nowrap">Subfeeder ID</th>
+                <th className="px-2 py-3 whitespace-nowrap">Cluster ID</th>
+                <th className="px-2 py-3">Cluster Name</th>
+                <th className="px-2 py-3 whitespace-nowrap">Short Name</th>
+                <th className="px-2 py-3 whitespace-nowrap">OLT Name</th>
+                <th className="px-2 py-3 whitespace-nowrap">Kecamatan</th>
+                <th className="px-2 py-3 text-center whitespace-nowrap">Start Imple Date</th>
+                <th className="px-2 py-3 text-center whitespace-nowrap">Progres</th>
+                <th className="px-2 py-3 text-right whitespace-nowrap">Aksi / Navigasi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-400">
+                  <td colSpan={11} className="p-8 text-center text-slate-400">
                     Tidak ada data Sitelist yang sesuai dengan filter.
                   </td>
                 </tr>
@@ -767,26 +781,26 @@ export default function SitelistClient({
                       !entry.isProvisioned ? 'bg-slate-50/40' : ''
                     }`}
                   >
-                    <td className="px-2.5 py-2.5 text-center text-slate-400 font-medium">{idx + 1}</td>
-                    <td className="px-2.5 py-2.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
+                    <td className="px-2 py-2.5 text-center text-slate-400 font-medium">{idx + 1}</td>
+                    <td className="px-2 py-2.5 font-mono font-semibold text-slate-700 whitespace-nowrap">
                       {entry.emrSiteCode}
                     </td>
-                    <td className="px-2.5 py-2.5 font-mono text-slate-600 whitespace-nowrap">
+                    <td className="px-2 py-2.5 font-mono text-slate-600 whitespace-nowrap">
                       {entry.subfeederId}
                     </td>
-                    <td className="px-2.5 py-2.5 font-mono font-semibold text-blue-700 whitespace-nowrap">
+                    <td className="px-2 py-2.5 font-mono font-semibold text-blue-700 whitespace-nowrap">
                       {entry.clusterId}
                     </td>
-                    <td className="px-2.5 py-2.5 font-semibold text-slate-900">{entry.clusterName}</td>
-                    <td className="px-2.5 py-2.5 font-extrabold text-slate-900 whitespace-nowrap">
+                    <td className="px-2 py-2.5 font-semibold text-slate-900">{entry.clusterName}</td>
+                    <td className="px-2 py-2.5 font-extrabold text-slate-900 whitespace-nowrap">
                       {entry.shortName}
                     </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
+                    <td className="px-2 py-2.5 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px]">
                         {entry.oltName}
                       </span>
                     </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap">
+                    <td className="px-2 py-2.5 whitespace-nowrap">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
                           entry.kecamatan.toLowerCase() === 'kedungtuban'
@@ -797,7 +811,16 @@ export default function SitelistClient({
                         {entry.kecamatan}
                       </span>
                     </td>
-                    <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                    <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                      {entry.startImpleDate ? (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-mono font-semibold text-[11px]">
+                          {entry.startImpleDate}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 text-center whitespace-nowrap">
                       {entry.isProvisioned ? (
                         <div className="inline-flex flex-col items-center">
                           <span
@@ -821,7 +844,7 @@ export default function SitelistClient({
                         </span>
                       )}
                     </td>
-                    <td className="px-2.5 py-2.5 text-right whitespace-nowrap">
+                    <td className="px-2 py-2.5 text-right whitespace-nowrap">
                       {entry.isProvisioned && entry.dbClusterId ? (
                         <div className="inline-flex items-center gap-1.5">
                           <Link
@@ -1051,6 +1074,31 @@ export default function SitelistClient({
                   </datalist>
                 </div>
 
+                <div className="sm:col-span-2">
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Start Imple Date <span className="text-[10px] font-normal text-slate-400">(dd-mmm-yy — kosongkan untuk otomatis dari laporan pertama)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={formStartImpleDate}
+                      onChange={(e) => setFormStartImpleDate(e.target.value)}
+                      placeholder="Contoh: 01-Nov-26"
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="date"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setFormStartImpleDate(toDdMmmYyFromIso(e.target.value));
+                        }
+                      }}
+                      className="px-2.5 py-2 bg-slate-100 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      title="Pilih tanggal dari kalender"
+                    />
+                  </div>
+                </div>
+
                 {isEditingExisting && (
                   <div className="sm:col-span-2 pt-2 border-t border-slate-100">
                     <label className="font-bold text-slate-700 block mb-1.5">
@@ -1110,6 +1158,7 @@ export default function SitelistClient({
                           oltName: formOltName,
                           kecamatan: formKecamatan,
                           kabupaten: formKabupaten,
+                          startImpleDate: formStartImpleDate,
                           homePasses: parseInt(formHomePasses, 10) || 0,
                           percentage: 0,
                           clrPercentage: 0,
