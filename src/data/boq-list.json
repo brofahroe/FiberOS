@@ -1,0 +1,136 @@
+[
+  {
+    "itemPekerjaan": "Instal Pole mounted outdoor type (16 ports type) Pole",
+    "aliases": [
+      "Instal Pole mounted outdoor type (16 ports type)",
+      "Instal Pole mounted outdoor type (16 ports type) Pole"
+    ],
+    "boq": "FAT",
+    "kategori": "FAT",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Instal 72 cores capacity pole mounted FDT",
+    "aliases": [
+      "Instal 72 cores capacity pole mounted FDT"
+    ],
+    "boq": "FDT48",
+    "kategori": "FDT",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Instal 48 cores capacity pole mounted FDT",
+    "aliases": [
+      "Instal 48 cores capacity pole mounted FDT"
+    ],
+    "boq": "FDT72",
+    "kategori": "FDT",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Fiber Optic Joint Closure Type In-line 48 Core",
+    "aliases": [
+      "Fiber Optic Joint Closure Type In-line 48 Core",
+      "Fiber Optic Joint Closure Type Inline 48 Core"
+    ],
+    "boq": "Joint Closure (JC)",
+    "kategori": "JC",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Fiber Optic Joint Closure Type In-line 144 Core",
+    "aliases": [
+      "Fiber Optic Joint Closure Type In-line 144 Core",
+      "Fiber Optic Joint Closure Type Inline 144 Core"
+    ],
+    "boq": "Joint Closure (JC)",
+    "kategori": "JC",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Instal FO core type SM G.652.D-ADSS 144 cores",
+    "aliases": [
+      "Instal FO core type SM G.652.D-ADSS 144 cores"
+    ],
+    "boq": "Kabel 144c",
+    "kategori": "CABLE",
+    "satuan": "Meter"
+  },
+  {
+    "itemPekerjaan": "Instal FO core type SM G.652.D-ADSS 24 cores",
+    "aliases": [
+      "Instal FO core type SM G.652.D-ADSS 24 cores"
+    ],
+    "boq": "Kabel 24c",
+    "kategori": "CABLE",
+    "satuan": "Meter"
+  },
+  {
+    "itemPekerjaan": "Instal FO core type SM G.652.D-ADSS 36 cores",
+    "aliases": [
+      "Instal FO core type SM G.652.D-ADSS 36 cores"
+    ],
+    "boq": "Kabel 36c",
+    "kategori": "CABLE",
+    "satuan": "Meter"
+  },
+  {
+    "itemPekerjaan": "Instal FO core type SM G.652.D-ADSS 48 cores",
+    "aliases": [
+      "Instal FO core type SM G.652.D-ADSS 48 cores"
+    ],
+    "boq": "Kabel 48c",
+    "kategori": "CABLE",
+    "satuan": "Meter"
+  },
+  {
+    "itemPekerjaan": "Instal FO core type SM G.652.D-ADSS 96 cores",
+    "aliases": [
+      "Instal FO core type SM G.652.D-ADSS 96 cores"
+    ],
+    "boq": "Kabel 96c",
+    "kategori": "CABLE",
+    "satuan": "Meter"
+  },
+  {
+    "itemPekerjaan": "Pemasangan Pole / Tiang Udara 7 M 2.5",
+    "aliases": [
+      "Pemasangan Pole / Tiang Udara 7 M 2.5",
+      "Pemasangan Pole / Tiang Udara 7 Meter 2.5"
+    ],
+    "boq": "Pole 7m \"2.5\"",
+    "kategori": "POLE",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Pemasangan Tiang 7 meter 3 inch",
+    "aliases": [
+      "Pemasangan Tiang 7 meter 3 inch",
+      "Pemasangan Tiang 7 meter 3\"",
+      "Pemasangan Tiang 7 meter 3\", STEL L-003 1996"
+    ],
+    "boq": "Pole 7m \"3\"",
+    "kategori": "POLE",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Pemasangan Tiang 7 meter 4\", STEL L-003 1996",
+    "aliases": [
+      "Pemasangan Tiang 7 meter 4\", STEL L-003 1996",
+      "Pemasangan Tiang 7 meter 4 inch"
+    ],
+    "boq": "Pole 7m \"4\"",
+    "kategori": "POLE",
+    "satuan": "Unit"
+  },
+  {
+    "itemPekerjaan": "Pemasangan Tiang Tunggal 9 meter 4\", STEL L-003 1996",
+    "aliases": [
+      "Pemasangan Tiang Tunggal 9 meter 4\", STEL L-003 1996",
+      "Pemasangan Tiang 9 meter 4\", STEL L-003 1996"
+    ],
+    "boq": "Pole 7m \"4\"",
+    "kategori": "POLE",
+    "satuan": "Unit"
+  }
+]

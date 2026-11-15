@@ -3,11 +3,14 @@
 import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import { runInitialSeed } from '@/actions/seed';
+import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
 import { calculateClusterProgress } from '@/lib/progressCalculator';
 import sitelistData from '@/data/sitelist.json';
 
 export async function getDashboardData() {
   try {
+    await cleanupLegacyRawBoqItems();
+
     let project = await prisma.project.findFirst({
       include: {
         clusters: {

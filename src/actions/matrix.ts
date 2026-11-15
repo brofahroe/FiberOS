@@ -2,9 +2,12 @@
 
 import { prisma } from '@/lib/prisma';
 import * as excel from 'xlsx';
+import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
 
 export async function getMatrixData(filterClusterId?: string) {
   try {
+    await cleanupLegacyRawBoqItems();
+
     const whereClause = filterClusterId && filterClusterId !== 'ALL' ? { id: filterClusterId } : {};
 
     const clusters = await prisma.cluster.findMany({

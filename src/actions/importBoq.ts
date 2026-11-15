@@ -5,87 +5,171 @@ import * as excel from 'xlsx';
 import { revalidatePath } from 'next/cache';
 import fs from 'fs';
 import path from 'path';
+import boqListFallback from '@/data/boq-list.json';
+import sitelistData from '@/data/sitelist.json';
+
+export interface BoqReferenceRule {
+  itemPekerjaan: string;
+  aliases?: string[];
+  boq: string;
+  kategori: string;
+  satuan: string;
+}
 
 export interface ParsedBoqItem {
-  itemName: string;
-  category: string;
-  unit: string;
-  quantity: number;
+  sourceItemName: string; // Kolom "Item Pekerjaan" dari BOQ-list.xlsx / Excel APD
+  boqName: string;        // Kolom "BOQ" dari BOQ-list.xlsx (nama pendek standar di aplikasi)
+  itemName: string;       // Disimpan ke WorkItem.itemName (sama dengan boqName)
+  category: string;       // Kolom "Kategori" dari BOQ-list.xlsx (FAT, FDT, JC, CABLE, POLE)
+  unit: string;           // Kolom "Satuan" dari BOQ-list.xlsx (Unit, Meter)
+  quantity: number;       // Volume BOQ dari file Excel APD
 }
 
 export interface ParsedBoqResult {
   clusterName: string;
   scope: 'CLUSTER' | 'SUBFEEDER';
+  homePasses?: number;
   projectCode?: string;
   sheetName: string;
   totalItems: number;
   items: ParsedBoqItem[];
+  allReferenceItems: ParsedBoqItem[];
+}
+
+function normalizeText(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export async function getBoqReferenceRules(): Promise<BoqReferenceRule[]> {
+  try {
+    const filePath = path.join(process.cwd(), 'BOQ-list.xlsx');
+    if (fs.existsSync(filePath)) {
+      const buffer = fs.readFileSync(filePath);
+      const wb = excel.read(buffer, { type: 'buffer' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = excel.utils.sheet_to_json(sheet, { defval: '' }) as Record<string, unknown>[];
+      const rules: BoqReferenceRule[] = [];
+
+      for (const r of rows) {
+        const itemPekerjaan = String(r['Item Pekerjaan'] || '').trim();
+        const boq = String(r['BOQ'] || '').trim();
+        const kategori = String(r['Kategori'] || '').trim().toUpperCase();
+        const satuan = String(r['Satuan'] || '').trim();
+        if (itemPekerjaan && boq) {
+          const fallbackMatch = boqListFallback.find(
+            (f) => normalizeText(f.itemPekerjaan) === normalizeText(itemPekerjaan)
+          );
+          rules.push({
+            itemPekerjaan,
+            aliases: fallbackMatch?.aliases || [
+              itemPekerjaan,
+              itemPekerjaan.replace(/\s+pole$/i, '').trim(),
+            ],
+            boq,
+            kategori: kategori || fallbackMatch?.kategori || 'OTHER',
+            satuan: satuan || fallbackMatch?.satuan || 'Unit',
+          });
+        }
+      }
+
+      if (rules.length > 0) {
+        return rules;
+      }
+    }
+  } catch (err) {
+    console.warn('Fallback to bundled boq-list.json:', err);
+  }
+  return boqListFallback;
+}
+
+function matchBoqRule(desc: string, rules: BoqReferenceRule[]): BoqReferenceRule | null {
+  const normDesc = normalizeText(desc);
+  if (!normDesc) return null;
+
+  for (const rule of rules) {
+    const candidates = [
+      rule.itemPekerjaan,
+      rule.itemPekerjaan.replace(/\s+pole$/i, '').trim(),
+      ...(rule.aliases || []),
+    ];
+    for (const cand of candidates) {
+      if (normalizeText(cand) === normDesc) {
+        return rule;
+      }
+    }
+  }
+  return null;
 }
 
 function cleanClusterName(rawName: string): string {
   let name = rawName.toUpperCase().trim();
-  name = name.replace(/^SF-/, '').replace(/^KELURAHAN\s+/, '').replace(/\s+BLORA$/, '').trim();
+  name = name
+    .replace(/^SF-/, '')
+    .replace(/^KEL(URAHAN)?\.?\s+/, '')
+    .replace(/\s+BLORA$/, '')
+    .trim();
+
+  // Check if it matches an official shortName in Sitelist
+  const matchedSite = sitelistData.sites.find(
+    (s) =>
+      s.shortName.toLowerCase() === name.toLowerCase() ||
+      s.clusterName.toLowerCase() === rawName.trim().toLowerCase() ||
+      s.clusterId.toLowerCase() === rawName.trim().toLowerCase()
+  );
+  if (matchedSite) {
+    return matchedSite.shortName.toUpperCase();
+  }
   return name;
 }
 
-function detectCategory(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.includes('pole') || lower.includes('tiang')) return 'POLE';
-  if (lower.includes('kabel') || lower.includes('cable') || lower.includes('fo type') || lower.includes('fo core') || lower.includes('cores')) return 'CABLE';
-  if (lower.includes('fat') || lower.includes('terminal box')) return 'FAT';
-  if (lower.includes('fdt') || lower.includes('distribution terminal')) return 'FDT';
-  if (lower.includes('joint closure') || lower.includes('closure') || lower.includes('jc')) return 'JC';
-  if (lower.includes('clamp') || lower.includes('sling') || lower.includes('hanger') || lower.includes('tray') || lower.includes('belt') || lower.includes('grip') || lower.includes('stoplink') || lower.includes('dead') || lower.includes('perapihan') || lower.includes('acc')) return 'ACCESSORY';
-  return 'OTHER';
-}
+async function parseWorkbook(workbook: excel.WorkBook, originalFilename?: string): Promise<ParsedBoqResult> {
+  const rules = await getBoqReferenceRules();
+  const isSubfeeder =
+    (originalFilename || '').toLowerCase().includes('subfeeder') ||
+    (originalFilename || '').toLowerCase().includes('sf-');
 
-function detectUnit(name: string, category: string, rawUnit?: string): string {
-  if (rawUnit && rawUnit.trim()) {
-    const u = rawUnit.toLowerCase().trim();
-    if (u === 'meter' || u === 'm') return 'Meter';
-    if (u === 'set' || u === 'unit') return 'Unit';
-    if (u === 'pcs' || u === 'btg' || u === 'batang') return 'Btg';
-  }
-  if (category === 'POLE') return 'Btg';
-  if (category === 'CABLE') return 'Meter';
-  if (category === 'FAT' || category === 'FDT' || category === 'JC') return 'Unit';
-  return 'Pcs';
-}
-
-function parseWorkbook(workbook: any, originalFilename?: string): ParsedBoqResult {
-  const isSubfeeder = (originalFilename || '').toLowerCase().includes('subfeeder') || (originalFilename || '').toLowerCase().includes('sf-');
   let targetSheetName = '';
   if (isSubfeeder) {
-    targetSheetName = workbook.SheetNames.find(
-      (s: string) => s.toLowerCase().includes('all feeder') || s.toLowerCase().includes('feeder')
-    ) || '';
+    targetSheetName =
+      workbook.SheetNames.find(
+        (s: string) => s.toLowerCase().includes('all feeder') || s.toLowerCase().includes('feeder')
+      ) || '';
   }
   if (!targetSheetName) {
-    targetSheetName = workbook.SheetNames.find(
-      (s: string) => s.toLowerCase().includes('cluster')
-    ) || workbook.SheetNames.find(
-      (s: string) => s.toLowerCase().includes('boq')
-    ) || workbook.SheetNames[0];
+    targetSheetName =
+      workbook.SheetNames.find((s: string) => s.toLowerCase().includes('cluster')) ||
+      workbook.SheetNames.find((s: string) => s.toLowerCase().includes('boq')) ||
+      workbook.SheetNames[0];
   }
 
   const sheet = workbook.Sheets[targetSheetName];
-  const rows = excel.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+  const rows = excel.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
 
   let clusterName = '';
+  let detectedHp = 0;
+
   for (let r = 0; r < Math.min(10, rows.length); r++) {
     const row = rows[r];
     if (!row) continue;
     for (let c = 0; c < row.length; c++) {
       const val = String(row[c] || '').trim();
-      if (val.toLowerCase() === 'cluster' || val.toLowerCase() === 'main/hub/sub feeder') {
+      const lowerVal = val.toLowerCase();
+      if (lowerVal === 'cluster' || lowerVal === 'main/hub/sub feeder') {
         const nextVal = String(row[c + 1] || '').trim();
         if (nextVal && nextVal.length > 2) {
           clusterName = nextVal;
-          break;
+        }
+      } else if (lowerVal === 'hp' || lowerVal === 'homepass' || lowerVal === 'home passes') {
+        const hpVal = parseInt(String(row[c + 1] || '0'), 10);
+        if (!isNaN(hpVal) && hpVal > 0) {
+          detectedHp = hpVal;
         }
       }
     }
-    if (clusterName) break;
   }
 
   if (!clusterName && originalFilename) {
@@ -95,65 +179,101 @@ function parseWorkbook(workbook: any, originalFilename?: string): ParsedBoqResul
     }
   }
 
-  const cleanedName = cleanClusterName(clusterName || (isSubfeeder ? 'SUBFEEDER BARU' : 'CLUSTER BARU'));
+  const cleanedName = cleanClusterName(
+    clusterName || (isSubfeeder ? 'SUBFEEDER BARU' : 'CLUSTER BARU')
+  );
 
-  const parsedItems: ParsedBoqItem[] = [];
+  // Map each rule from BOQ-list.xlsx to its detected quantity in the sheet
+  const ruleQuantities = new Map<number, { qty: number; matchedDesc: string }>();
 
-  for (let r = 6; r < rows.length; r++) {
+  for (let r = 5; r < rows.length; r++) {
     const row = rows[r];
-    if (!row || row.length < 3) continue;
+    if (!row || row.length < 2) continue;
 
-    const desc = String(row[1] || row[14] || '').trim();
-    const rawUnit = String(row[2] || '').trim();
-    const matQty = parseFloat(row[3]);
-    const servQty = parseFloat(row[4]);
+    const desc = String(row[1] || '').trim();
+    if (!desc) continue;
 
+    const matchedRuleIdx = rules.findIndex((rule) => matchBoqRule(desc, [rule]) !== null);
+    if (matchedRuleIdx === -1) continue;
+
+    const matQty = parseFloat(String(row[3] ?? ''));
+    const servQty = parseFloat(String(row[4] ?? ''));
+
+    // Prioritize Service Qty for Instal/Pemasangan rows, fallback to Material Qty
     let qty = 0;
-    if (!isNaN(matQty) && matQty > 0) {
-      qty = matQty;
-    } else if (!isNaN(servQty) && servQty > 0) {
+    if (!isNaN(servQty) && servQty > 0) {
       qty = servQty;
+    } else if (!isNaN(matQty) && matQty > 0) {
+      qty = matQty;
+    } else if (r > 5 && rows[r - 1]) {
+      // Fallback: check if the row immediately above is the paired material row with Material Qty > 0
+      const prevRow = rows[r - 1];
+      const prevDesc = normalizeText(String(prevRow?.[1] || ''));
+      const currNorm = normalizeText(desc).replace(/^(instal(asi)?|pemasangan)\s+/i, '').trim();
+      if (prevDesc && currNorm && (prevDesc.includes(currNorm) || currNorm.includes(prevDesc))) {
+        const prevMatQty = parseFloat(String(prevRow?.[3] ?? ''));
+        if (!isNaN(prevMatQty) && prevMatQty > 0) {
+          qty = prevMatQty;
+        }
+      }
     }
 
-    if (desc && qty > 0) {
-      if (desc.toLowerCase().startsWith('sub total') || desc.toLowerCase().startsWith('total') || desc.toLowerCase().startsWith('pengamanan')) {
-        continue;
-      }
-
-      const category = detectCategory(desc);
-      const unit = detectUnit(desc, category, rawUnit);
-
-      parsedItems.push({
-        itemName: desc,
-        category,
-        unit,
-        quantity: Math.round(qty * 10) / 10,
+    const roundedQty = Math.round(qty * 10) / 10;
+    const prev = ruleQuantities.get(matchedRuleIdx);
+    if (!prev || roundedQty > prev.qty) {
+      ruleQuantities.set(matchedRuleIdx, {
+        qty: roundedQty,
+        matchedDesc: desc.replace(/\s+Pole$/i, ''),
       });
     }
   }
 
+  const allReferenceItems: ParsedBoqItem[] = rules.map((rule, idx) => {
+    const found = ruleQuantities.get(idx);
+    const displaySource = rule.itemPekerjaan.replace(/\s+Pole$/i, '');
+    return {
+      sourceItemName: found?.matchedDesc || displaySource,
+      boqName: rule.boq,
+      itemName: rule.boq,
+      category: rule.kategori,
+      unit: rule.satuan,
+      quantity: found ? found.qty : 0,
+    };
+  });
+
+  const activeItems = allReferenceItems.filter((item) => item.quantity > 0);
+  const parsedItems = activeItems.length > 0 ? activeItems : allReferenceItems;
+
   return {
     clusterName: cleanedName,
     scope: isSubfeeder ? 'SUBFEEDER' : 'CLUSTER',
+    homePasses: detectedHp,
     sheetName: targetSheetName,
     totalItems: parsedItems.length,
     items: parsedItems,
+    allReferenceItems,
   };
 }
 
-export async function parseBoqExcel(base64Data: string, originalFilename?: string): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
+export async function parseBoqExcel(
+  base64Data: string,
+  originalFilename?: string
+): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
     const buffer = Buffer.from(base64Data, 'base64');
     const workbook = excel.read(buffer, { type: 'buffer' });
-    const result = parseWorkbook(workbook, originalFilename);
+    const result = await parseWorkbook(workbook, originalFilename);
     return { success: true, data: result };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error parsing BOQ Excel:', err);
-    return { success: false, error: err.message || 'Gagal membaca file Excel.' };
+    const errMsg = err instanceof Error ? err.message : 'Gagal membaca file Excel.';
+    return { success: false, error: errMsg };
   }
 }
 
-export async function parseSampleBoqFile(filename: string): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
+export async function parseSampleBoqFile(
+  filename: string
+): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
     const filePath = path.resolve(filename);
     if (!fs.existsSync(filePath)) {
@@ -161,12 +281,33 @@ export async function parseSampleBoqFile(filename: string): Promise<{ success: b
     }
     const buffer = fs.readFileSync(filePath);
     const workbook = excel.read(buffer, { type: 'buffer' });
-    const result = parseWorkbook(workbook, filename);
+    const result = await parseWorkbook(workbook, filename);
     return { success: true, data: result };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error reading sample BOQ file:', err);
-    return { success: false, error: err.message || 'Gagal membaca file contoh.' };
+    const errMsg = err instanceof Error ? err.message : 'Gagal membaca file contoh.';
+    return { success: false, error: errMsg };
   }
+}
+
+function getWorkItemWeightAndType(category: string, scope: 'CLUSTER' | 'SUBFEEDER') {
+  const cat = category.toUpperCase();
+  if (cat === 'POLE') {
+    return { workType: 'CW', subCategory: 'POLE', weight: scope === 'SUBFEEDER' ? 50 : 40 };
+  }
+  if (cat === 'CABLE') {
+    return { workType: 'CW', subCategory: 'CABLE', weight: 20 };
+  }
+  if (cat === 'FAT') {
+    return { workType: 'EL', subCategory: 'FAT', weight: 25 };
+  }
+  if (cat === 'FDT') {
+    return { workType: 'EL', subCategory: 'FDT', weight: 5 };
+  }
+  if (cat === 'JC') {
+    return { workType: 'EL', subCategory: 'JC', weight: 20 };
+  }
+  return { workType: 'CW', subCategory: 'ACC', weight: 10 };
 }
 
 export async function commitBoqImport(data: {
@@ -190,15 +331,19 @@ export async function commitBoqImport(data: {
     }
 
     const cleanedName = cleanClusterName(data.clusterName);
-    const scope: 'CLUSTER' | 'SUBFEEDER' = data.scope || (data.clusterName.toUpperCase().includes('SF') ? 'SUBFEEDER' : 'CLUSTER');
+    const scope: 'CLUSTER' | 'SUBFEEDER' =
+      data.scope || (data.clusterName.toUpperCase().includes('SF') ? 'SUBFEEDER' : 'CLUSTER');
+
+    const matchedSite = sitelistData.sites.find(
+      (s) =>
+        s.shortName.toLowerCase() === cleanedName.toLowerCase() ||
+        s.clusterName.toLowerCase() === data.clusterName.trim().toLowerCase()
+    );
 
     let cluster = await prisma.cluster.findFirst({
       where: {
         projectId: project.id,
-        OR: [
-          { name: cleanedName },
-          { name: data.clusterName.trim() },
-        ],
+        OR: [{ name: cleanedName }, { name: data.clusterName.trim() }],
       },
     });
 
@@ -207,6 +352,13 @@ export async function commitBoqImport(data: {
         data: {
           projectId: project.id,
           name: cleanedName,
+          code: matchedSite?.clusterId || `CLRM07-99-${cleanedName}`,
+          emrSiteCode: matchedSite?.emrSiteCode || undefined,
+          subfeederId: matchedSite?.subfeederId || undefined,
+          clusterName: matchedSite?.clusterName || `KELURAHAN ${cleanedName} BLORA`,
+          oltName: matchedSite?.oltName || 'OLT Balun',
+          kecamatan: matchedSite?.kecamatan || 'Kedungtuban',
+          kabupaten: matchedSite?.kabupaten || 'Blora',
           homePasses: data.homePasses || 0,
         },
       });
@@ -217,44 +369,64 @@ export async function commitBoqImport(data: {
       });
     }
 
-    let sortOrder = scope === 'SUBFEEDER' ? 100 : 0;
-    for (const it of data.items) {
-      let workType = 'CW';
-      let subCategory = 'POLE';
-      let weight = 40;
+    // Aggregate items that map to the same BOQ target name (e.g. JC 48c + JC 144c -> Joint Closure (JC), or Pole 7m "4" + 9m "4")
+    const aggregatedMap = new Map<
+      string,
+      { boqName: string; category: string; unit: string; quantity: number }
+    >();
 
-      if (it.category === 'POLE') {
-        workType = 'CW';
-        subCategory = 'POLE';
-        weight = scope === 'SUBFEEDER' ? 50 : 40;
-      } else if (it.category === 'CABLE') {
-        workType = 'CW';
-        subCategory = 'CABLE';
-        weight = 20;
-      } else if (it.category === 'FAT') {
-        workType = 'EL';
-        subCategory = 'FAT';
-        weight = 25;
-      } else if (it.category === 'FDT') {
-        workType = 'EL';
-        subCategory = 'FDT';
-        weight = 5;
-      } else if (it.category === 'JC') {
-        workType = 'EL';
-        subCategory = 'JC';
-        weight = 20;
-      } else if (it.category === 'ACCESSORY') {
-        workType = 'CW';
-        subCategory = 'ACC';
-        weight = 10;
+    for (const it of data.items) {
+      const targetName = (it.boqName || it.itemName).trim();
+      if (!targetName) continue;
+      const existing = aggregatedMap.get(targetName);
+      if (existing) {
+        existing.quantity = Math.round((existing.quantity + it.quantity) * 10) / 10;
+      } else {
+        aggregatedMap.set(targetName, {
+          boqName: targetName,
+          category: it.category,
+          unit: it.unit,
+          quantity: Math.round(it.quantity * 10) / 10,
+        });
       }
+    }
+
+    // Filter to items with quantity > 0 (unless all are 0)
+    const allAggregated = Array.from(aggregatedMap.values());
+    const nonZeroAggregated = allAggregated.filter((i) => i.quantity > 0);
+    const itemsToSave = nonZeroAggregated.length > 0 ? nonZeroAggregated : allAggregated;
+    const savedNamesSet = new Set(itemsToSave.map((i) => i.boqName.toLowerCase()));
+
+    // Remove legacy/unmapped or 0-progress placeholder items in this cluster+scope that are not in the new BOQ import
+    const existingWorkItems = await prisma.workItem.findMany({
+      where: {
+        clusterId: cluster.id,
+        scope,
+      },
+      include: {
+        progressList: { select: { id: true } },
+      },
+    });
+
+    for (const oldItem of existingWorkItems) {
+      if (
+        !savedNamesSet.has(oldItem.itemName.trim().toLowerCase()) &&
+        oldItem.progressList.length === 0
+      ) {
+        await prisma.workItem.delete({ where: { id: oldItem.id } });
+      }
+    }
+
+    let sortOrder = scope === 'SUBFEEDER' ? 100 : 1;
+    for (const it of itemsToSave) {
+      const { workType, subCategory, weight } = getWorkItemWeightAndType(it.category, scope);
 
       await prisma.workItem.upsert({
         where: {
           clusterId_scope_itemName: {
             clusterId: cluster.id,
             scope,
-            itemName: it.itemName,
+            itemName: it.boqName,
           },
         },
         update: {
@@ -272,7 +444,7 @@ export async function commitBoqImport(data: {
           category: it.category,
           subCategory,
           weight,
-          itemName: it.itemName,
+          itemName: it.boqName,
           unit: it.unit,
           boq: it.quantity,
           sortOrder: sortOrder++,
@@ -283,13 +455,123 @@ export async function commitBoqImport(data: {
     revalidatePath('/');
     revalidatePath('/matrix');
     revalidatePath('/clusters');
+    revalidatePath('/daily-input');
+    revalidatePath('/sitelist');
 
     return {
       success: true,
-      message: `Berhasil mengimpor BOQ (${scope === 'SUBFEEDER' ? 'Subfeeder 30%' : 'Cluster 70%'}) untuk cluster "${cluster.name}" dengan ${data.items.length} item pekerjaan!`,
+      message: `Berhasil mengimpor BOQ (${scope === 'SUBFEEDER' ? 'Subfeeder 30%' : 'Cluster 70%'}) untuk cluster "${cluster.name}" dengan ${itemsToSave.length} item BOQ standar!`,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error committing BOQ import:', err);
-    return { success: false, error: err.message || 'Gagal menyimpan data BOQ.' };
+    const errMsg = err instanceof Error ? err.message : 'Gagal menyimpan data BOQ.';
+    return { success: false, error: errMsg };
+  }
+}
+
+/**
+ * Automatically cleans up any cluster in DB that previously imported raw 38-item APD descriptions
+ * (e.g., "Transportasi, Mobilisasi & demobilisasi", "FO core type SM...", "Instal FO core type...")
+ * and converts them into the standardized BOQ-list.xlsx items.
+ */
+export async function cleanupLegacyRawBoqItems() {
+  try {
+    const rules = await getBoqReferenceRules();
+    const rawItems = await prisma.workItem.findMany({
+      where: {
+        OR: [
+          { itemName: { contains: 'Transportasi, Mobilisasi' } },
+          { itemName: { contains: 'FO core type SM' } },
+          { itemName: { contains: 'cores capacity pole mounted FDT' } },
+          { itemName: { contains: 'Pole mounted outdoor type' } },
+          { itemName: { contains: 'STEL L-003' } },
+          { itemName: { contains: 'Pemasangan Tiang' } },
+          { itemName: { contains: 'Pemasangan Pole' } },
+        ],
+      },
+      select: { clusterId: true, scope: true },
+    });
+
+    if (rawItems.length === 0) return;
+
+    const affectedKeys = Array.from(new Set(rawItems.map((r) => `${r.clusterId}:::${r.scope}`)));
+
+    for (const key of affectedKeys) {
+      const [clusterId, scopeStr] = key.split(':::');
+      const scope = (scopeStr === 'SUBFEEDER' ? 'SUBFEEDER' : 'CLUSTER') as 'CLUSTER' | 'SUBFEEDER';
+
+      const clusterItems = await prisma.workItem.findMany({
+        where: { clusterId, scope },
+        include: { progressList: true },
+      });
+
+      const validBoqNames = new Set(rules.map((r) => r.boq.toLowerCase()));
+      const mappedTotals = new Map<
+        string,
+        { boqName: string; category: string; unit: string; quantity: number }
+      >();
+
+      for (const item of clusterItems) {
+        const matchedRule = matchBoqRule(item.itemName, rules);
+        if (matchedRule) {
+          const existing = mappedTotals.get(matchedRule.boq);
+          if (existing) {
+            existing.quantity = Math.round((existing.quantity + item.boq) * 10) / 10;
+          } else {
+            mappedTotals.set(matchedRule.boq, {
+              boqName: matchedRule.boq,
+              category: matchedRule.kategori,
+              unit: matchedRule.satuan,
+              quantity: Math.round(item.boq * 10) / 10,
+            });
+          }
+        }
+      }
+
+      // Delete raw unmapped items that have no daily progress
+      for (const item of clusterItems) {
+        if (!validBoqNames.has(item.itemName.trim().toLowerCase()) && item.progressList.length === 0) {
+          await prisma.workItem.delete({ where: { id: item.id } });
+        }
+      }
+
+      // Upsert the standardized BOQ items
+      let sortOrder = scope === 'SUBFEEDER' ? 100 : 1;
+      for (const mapped of Array.from(mappedTotals.values())) {
+        if (mapped.quantity <= 0) continue;
+        const { workType, subCategory, weight } = getWorkItemWeightAndType(mapped.category, scope);
+        await prisma.workItem.upsert({
+          where: {
+            clusterId_scope_itemName: {
+              clusterId,
+              scope,
+              itemName: mapped.boqName,
+            },
+          },
+          update: {
+            boq: mapped.quantity,
+            category: mapped.category,
+            subCategory,
+            workType,
+            weight,
+            unit: mapped.unit,
+          },
+          create: {
+            clusterId,
+            scope,
+            workType,
+            category: mapped.category,
+            subCategory,
+            weight,
+            itemName: mapped.boqName,
+            unit: mapped.unit,
+            boq: mapped.quantity,
+            sortOrder: sortOrder++,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Error in cleanupLegacyRawBoqItems:', err);
   }
 }

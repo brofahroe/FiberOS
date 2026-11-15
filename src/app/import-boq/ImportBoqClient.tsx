@@ -2,16 +2,26 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { parseBoqExcel, parseSampleBoqFile, commitBoqImport, ParsedBoqResult } from '@/actions/importBoq';
-import { 
-  Upload, 
-  FileSpreadsheet, 
-  CheckCircle2, 
-  AlertCircle, 
-  Loader2, 
-  Check, 
+import {
+  parseBoqExcel,
+  parseSampleBoqFile,
+  commitBoqImport,
+  ParsedBoqResult,
+  ParsedBoqItem,
+} from '@/actions/importBoq';
+import boqReferenceList from '@/data/boq-list.json';
+import {
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Check,
   FileText,
-  Save
+  Save,
+  Table2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export default function ImportBoqClient() {
@@ -22,6 +32,8 @@ export default function ImportBoqClient() {
   const [clusterName, setClusterName] = useState<string>('');
   const [scope, setScope] = useState<'CLUSTER' | 'SUBFEEDER'>('CLUSTER');
   const [homePasses, setHomePasses] = useState<string>('0');
+  const [showAllRefItems, setShowAllRefItems] = useState<boolean>(false);
+  const [showRefGuide, setShowRefGuide] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,6 +54,9 @@ export default function ImportBoqClient() {
         setResult(res.data);
         setClusterName(res.data.clusterName);
         setScope(res.data.scope || 'CLUSTER');
+        if (res.data.homePasses && res.data.homePasses > 0) {
+          setHomePasses(String(res.data.homePasses));
+        }
       } else {
         setMessage({ type: 'error', text: res.error || 'Gagal membaca file Excel' });
       }
@@ -66,11 +81,20 @@ export default function ImportBoqClient() {
       setResult(res.data);
       setClusterName(res.data.clusterName);
       setScope(res.data.scope || 'CLUSTER');
+      if (res.data.homePasses && res.data.homePasses > 0) {
+        setHomePasses(String(res.data.homePasses));
+      }
       setMessage({ type: 'success', text: `File contoh "${filename}" berhasil dibaca!` });
     } else {
       setMessage({ type: 'error', text: res.error || 'Gagal membaca file contoh' });
     }
   };
+
+  const displayedItems: ParsedBoqItem[] = result
+    ? showAllRefItems
+      ? result.allReferenceItems
+      : result.items
+    : [];
 
   const handleCommit = async () => {
     if (!result || !clusterName.trim()) {
@@ -101,8 +125,25 @@ export default function ImportBoqClient() {
     }
   };
 
+  const getCategoryBadgeStyle = (category: string) => {
+    switch (category) {
+      case 'POLE':
+        return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'CABLE':
+        return 'bg-sky-50 text-sky-800 border-sky-200';
+      case 'FAT':
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      case 'FDT':
+        return 'bg-purple-50 text-purple-800 border-purple-200';
+      case 'JC':
+        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       {/* Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
         <div>
@@ -111,10 +152,72 @@ export default function ImportBoqClient() {
             Impor Master BOQ dari File Excel
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Unggah file format APD (Cluster / Subfeeder) untuk mendaftarkan target volume pekerjaan secara otomatis.
+            Unggah file format APD (Cluster / Subfeeder). Sistem otomatis memfilter dan memetakan item sesuai tabel acuan{' '}
+            <span className="font-semibold text-slate-700">BOQ-list.xlsx</span>.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowRefGuide(!showRefGuide)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-sm transition self-start sm:self-auto"
+        >
+          <Table2 className="w-4 h-4 text-blue-600" />
+          <span>Tabel Acuan BOQ-list.xlsx (14 Item)</span>
+          {showRefGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
       </div>
+
+      {/* Collapsible Reference Table (BOQ-list.xlsx) */}
+      {showRefGuide && (
+        <div className="bg-white rounded-2xl p-5 border border-blue-200 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Table2 className="w-4 h-4 text-blue-600" />
+                Tabel Acuan Mapping Import BOQ (BOQ-list.xlsx)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Hanya baris pekerjaan di bawah ini yang diambil dari lembar kerja Excel APD dan dikonversi ke nama BOQ standar aplikasi.
+              </p>
+            </div>
+          </div>
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-100 text-slate-800 font-bold">
+                <tr>
+                  <th className="p-2.5 border-b border-r border-slate-200">Item Pekerjaan</th>
+                  <th className="p-2.5 border-b border-r border-slate-200 w-44">BOQ</th>
+                  <th className="p-2.5 border-b border-r border-slate-200 w-28">Kategori</th>
+                  <th className="p-2.5 border-b border-slate-200 w-24 text-center">Satuan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 text-slate-700">
+                {boqReferenceList.map((row, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50">
+                    <td className="p-2 border-r border-slate-200 font-medium text-slate-900">
+                      {row.itemPekerjaan.replace(/\s+Pole$/i, '')}
+                    </td>
+                    <td className="p-2 border-r border-slate-200 font-bold text-slate-900">
+                      {row.boq}
+                    </td>
+                    <td className="p-2 border-r border-slate-200">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getCategoryBadgeStyle(
+                          row.kategori
+                        )}`}
+                      >
+                        {row.kategori}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center text-slate-600">{row.satuan}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {message && (
         <div
@@ -142,8 +245,8 @@ export default function ImportBoqClient() {
           <span className="font-bold text-slate-800 text-base mt-3">
             Pilih File Excel BOQ (.xlsx / .xls)
           </span>
-          <span className="text-xs text-slate-500 mt-1 max-w-sm">
-            Mendukung format resmi APD: Sheet BoQ NRO Cluster atau BoQ NRO All Feeder.
+          <span className="text-xs text-slate-500 mt-1 max-w-md">
+            Mendukung format resmi APD: Sheet BoQ NRO Cluster atau BoQ NRO All Feeder (otomatis difilter sesuai tabel acuan BOQ-list.xlsx).
           </span>
           <input
             type="file"
@@ -157,7 +260,7 @@ export default function ImportBoqClient() {
         {parsing && (
           <div className="flex items-center justify-center gap-2 py-4 text-blue-600 font-semibold text-sm">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Menganalisis lembar kerja BOQ...</span>
+            <span>Menganalisis lembar kerja BOQ berdasarkan acuan BOQ-list.xlsx...</span>
           </div>
         )}
 
@@ -196,27 +299,39 @@ export default function ImportBoqClient() {
                 <Check className="w-3 h-3" /> Berhasil Membaca Lembar Kerja: {result.sheetName}
               </span>
               <h2 className="text-lg font-bold text-slate-900">
-                Preview Data BOQ Terdeteksi ({result.totalItems} item)
+                Preview Data BOQ Terdeteksi ({displayedItems.length} item sesuai BOQ-list.xlsx)
               </h2>
             </div>
 
-            <button
-              onClick={handleCommit}
-              disabled={committing}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 transition disabled:opacity-50"
-            >
-              {committing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Menyimpan ke Database...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Simpan ke Database</span>
-                </>
-              )}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAllRefItems(!showAllRefItems)}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+              >
+                {showAllRefItems
+                  ? `Tampilkan Hanya Volume > 0 (${result.items.length})`
+                  : `Tampilkan Semua 14 Item Acuan`}
+              </button>
+
+              <button
+                onClick={handleCommit}
+                disabled={committing}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 transition disabled:opacity-50"
+              >
+                {committing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menyimpan ke Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Simpan ke Database</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Cluster details inputs */}
@@ -239,7 +354,7 @@ export default function ImportBoqClient() {
               </label>
               <select
                 value={scope}
-                onChange={(e) => setScope(e.target.value as any)}
+                onChange={(e) => setScope(e.target.value as 'CLUSTER' | 'SUBFEEDER')}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="CLUSTER">🏙️ Pekerjaan Cluster (Bobot 70%)</option>
@@ -260,30 +375,49 @@ export default function ImportBoqClient() {
             </div>
           </div>
 
-          {/* Table Preview */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden max-h-96 overflow-y-auto">
+          {/* Table Preview matching BOQ-list.xlsx */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[460px] overflow-y-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10">
+              <thead className="bg-slate-100 text-slate-800 font-bold sticky top-0 z-10">
                 <tr>
-                  <th className="p-3 border-b border-slate-200 w-12 text-center">No</th>
-                  <th className="p-3 border-b border-slate-200">Item Pekerjaan</th>
-                  <th className="p-3 border-b border-slate-200 w-28">Kategori</th>
-                  <th className="p-3 border-b border-slate-200 w-20 text-center">Satuan</th>
-                  <th className="p-3 border-b border-slate-200 w-28 text-right">Volume BOQ</th>
+                  <th className="p-3 border-b border-r border-slate-200 w-12 text-center">No</th>
+                  <th className="p-3 border-b border-r border-slate-200">Item Pekerjaan</th>
+                  <th className="p-3 border-b border-r border-slate-200 w-44">BOQ</th>
+                  <th className="p-3 border-b border-r border-slate-200 w-28">Kategori</th>
+                  <th className="p-3 border-b border-r border-slate-200 w-24 text-center">Satuan</th>
+                  <th className="p-3 border-b border-slate-200 w-32 text-right">Volume BOQ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {result.items.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition">
-                    <td className="p-2.5 text-center text-slate-400">{idx + 1}</td>
-                    <td className="p-2.5 font-medium text-slate-900">{item.itemName}</td>
-                    <td className="p-2.5">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+              <tbody className="divide-y divide-slate-200 text-slate-700">
+                {displayedItems.map((item, idx) => (
+                  <tr
+                    key={idx}
+                    className={`hover:bg-slate-50 transition ${
+                      item.quantity === 0 ? 'opacity-50 bg-slate-50/50' : ''
+                    }`}
+                  >
+                    <td className="p-2.5 border-r border-slate-100 text-center text-slate-400">
+                      {idx + 1}
+                    </td>
+                    <td className="p-2.5 border-r border-slate-100 font-medium text-slate-900">
+                      {item.sourceItemName}
+                    </td>
+                    <td className="p-2.5 border-r border-slate-100 font-bold text-slate-900">
+                      {item.boqName}
+                    </td>
+                    <td className="p-2.5 border-r border-slate-100">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getCategoryBadgeStyle(
+                          item.category
+                        )}`}
+                      >
                         {item.category}
                       </span>
                     </td>
-                    <td className="p-2.5 text-center text-slate-500">{item.unit}</td>
-                    <td className="p-2.5 text-right font-bold text-blue-700">
+                    <td className="p-2.5 border-r border-slate-100 text-center text-slate-600">
+                      {item.unit}
+                    </td>
+                    <td className="p-2.5 text-right font-extrabold text-blue-700">
                       {item.quantity.toLocaleString()}
                     </td>
                   </tr>
