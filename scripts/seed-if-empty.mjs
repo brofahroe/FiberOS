@@ -53,7 +53,7 @@ async function main() {
   const project = await prisma.project.create({
     data: {
       code: 'BLA-KEDUNGTUBAN',
-      name: 'ROLLOUT GCI-MTI BLORA',
+      name: 'GCI-MTI BLORA',
       description: 'Proyek FTTH Rollout Kedungtuban Blora',
     },
   });

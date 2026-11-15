@@ -383,7 +383,7 @@ export async function createOrActivateSitelistCluster(input: {
       project = await prisma.project.create({
         data: {
           code: 'BLA-KEDUNGTUBAN',
-          name: 'ALL CL KEDUNGTUBAN BLORA',
+          name: 'GCI-MTI BLORA',
           description: 'Proyek FTTH Rollout Kedungtuban & Cepu Blora',
         },
       });
@@ -487,7 +487,7 @@ export async function activateAllSitelistClusters(kecamatanFilter?: string) {
       project = await prisma.project.create({
         data: {
           code: 'BLA-KEDUNGTUBAN',
-          name: 'ALL CL KEDUNGTUBAN BLORA',
+          name: 'GCI-MTI BLORA',
           description: 'Proyek FTTH Rollout Kedungtuban & Cepu Blora',
         },
       });

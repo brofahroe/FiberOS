@@ -50,6 +50,15 @@ export async function getDashboardData() {
       };
     }
 
+    if (project.name.includes('ALL CL KEDUNGTUBAN') || project.name === 'ROLLOUT GCI-MTI BLORA') {
+      const updatedName = 'GCI-MTI BLORA';
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { name: updatedName },
+      });
+      project.name = updatedName;
+    }
+
   let totalBoq = 0;
   let totalInstalled = 0;
   let totalHomePasses = 0;

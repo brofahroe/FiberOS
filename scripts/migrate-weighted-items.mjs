@@ -17,6 +17,18 @@ try {
 
 async function main() {
   console.log('--- Starting Weighted Items & Sitelist Metadata Migration ---');
+
+  await prisma.project.updateMany({
+    where: {
+      OR: [
+        { name: { contains: 'ALL CL KEDUNGTUBAN' } },
+        { name: 'ROLLOUT GCI-MTI BLORA' },
+      ],
+    },
+    data: {
+      name: 'GCI-MTI BLORA',
+    },
+  });
   
   const clusters = await prisma.cluster.findMany({
     include: {

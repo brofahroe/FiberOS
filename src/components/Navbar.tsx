@@ -35,7 +35,7 @@ export default function Navbar() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 font-medium -mt-1">
-                Kedungtuban Blora Rollout
+                GCI-MTI Blora Rollout
               </p>
             </div>
           </Link>
