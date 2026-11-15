@@ -451,60 +451,117 @@ export async function updateDailyCellProgress(
   clusterId: string,
   workItemId: string,
   reportDate: string,
-  newQuantity: number
+  newQuantity: number,
+  newReportDate?: string
 ) {
   try {
-    const reportsForDate = await prisma.dailyReport.findMany({
-      where: { clusterId, reportDate },
-      select: { teamName: true },
-    });
-    const teams = new Set(
-      reportsForDate
-        .map((report) => report.teamName?.trim() || '')
-        .filter(Boolean)
-    );
-    if (teams.size > 1) {
-      return {
-        success: false,
-        error: 'Koreksi Matriks dinonaktifkan karena tanggal ini memiliki laporan dari beberapa tim.',
-      };
-    }
+    const canonicalDate = normalizeToDdMmmYy(reportDate);
+    const targetCanonicalDate = newReportDate ? normalizeToDdMmmYy(newReportDate) : canonicalDate;
+    const isMovingDate = targetCanonicalDate !== canonicalDate;
+    const dateVariants = getDateVariants(reportDate);
 
-    // 1. Find or create DailyReport for this cluster and date
-    let report = await prisma.dailyReport.findFirst({
+    const reportsForOldDate = await prisma.dailyReport.findMany({
       where: {
         clusterId,
-        reportDate,
+        reportDate: { in: dateVariants },
       },
+      orderBy: { updatedAt: 'desc' },
     });
 
-    if (!report) {
+    const oldReportIds = reportsForOldDate.map((r) => r.id);
+
+    // If user is moving this cell to a different date, remove it from the old date first
+    if (isMovingDate && oldReportIds.length > 0) {
+      await prisma.dailyProgressItem.deleteMany({
+        where: {
+          dailyReportId: { in: oldReportIds },
+          workItemId,
+        },
+      });
+
+      // Clean up any old report that now has 0 items left
+      for (const oldRepId of oldReportIds) {
+        const remainingCount = await prisma.dailyProgressItem.count({
+          where: { dailyReportId: oldRepId },
+        });
+        if (remainingCount === 0) {
+          await prisma.dailyReport.delete({ where: { id: oldRepId } });
+        }
+      }
+    }
+
+    const targetVariants = getDateVariants(targetCanonicalDate);
+    const reportsForTargetDate = isMovingDate
+      ? await prisma.dailyReport.findMany({
+          where: {
+            clusterId,
+            reportDate: { in: targetVariants },
+          },
+          orderBy: { updatedAt: 'desc' },
+        })
+      : reportsForOldDate;
+
+    // 1. Find or create primary DailyReport for the target date
+    let report = reportsForTargetDate[0] || null;
+
+    if (!report && newQuantity > 0) {
       report = await prisma.dailyReport.create({
         data: {
           clusterId,
-          reportDate,
+          reportDate: targetCanonicalDate,
           reporterName: 'Supervisor Lapangan',
           teamName: 'Tim FTTH Blora',
           notes: 'Koreksi progres via Matriks',
         },
       });
-    } else {
+    } else if (report) {
       await prisma.dailyReport.update({
         where: { id: report.id },
-        data: { updatedAt: new Date() },
+        data: {
+          reportDate: targetCanonicalDate,
+          updatedAt: new Date(),
+        },
       });
     }
 
-    // 2. If newQuantity <= 0, delete or zero out the item
+    const allTargetReportIds = reportsForTargetDate.map((r) => r.id);
+    if (report && !allTargetReportIds.includes(report.id)) {
+      allTargetReportIds.push(report.id);
+    }
+
+    // 2. If newQuantity <= 0, delete the item across all reports for this cluster & date
     if (newQuantity <= 0) {
-      await prisma.dailyProgressItem.deleteMany({
-        where: {
-          dailyReportId: report.id,
-          workItemId,
-        },
-      });
-    } else {
-      // 3. Upsert with the exact newQuantity
+      if (allTargetReportIds.length > 0) {
+        await prisma.dailyProgressItem.deleteMany({
+          where: {
+            dailyReportId: { in: allTargetReportIds },
+            workItemId,
+          },
+        });
+
+        // Clean up any report that now has 0 items left so empty date columns don't remain
+        for (const repId of allTargetReportIds) {
+          const remainingCount = await prisma.dailyProgressItem.count({
+            where: { dailyReportId: repId },
+          });
+          if (remainingCount === 0) {
+            await prisma.dailyReport.delete({ where: { id: repId } });
+          }
+        }
+      }
+    } else if (report) {
+      // Remove any duplicate entries on secondary reports of the same date so total matches newQuantity
+      const secondaryReportIds = allTargetReportIds.filter((id) => id !== report.id);
+      if (secondaryReportIds.length > 0) {
+        await prisma.dailyProgressItem.deleteMany({
+          where: {
+            dailyReportId: { in: secondaryReportIds },
+            workItemId,
+          },
+        });
+      }
+
+      // 3. Upsert with the exact newQuantity on the primary report
       await prisma.dailyProgressItem.upsert({
         where: {
           dailyReportId_workItemId: {
@@ -530,7 +587,11 @@ export async function updateDailyCellProgress(
     revalidatePath('/clusters');
     revalidatePath('/sitelist');
 
-    return { success: true, message: `Progres tanggal ${reportDate} berhasil diperbarui.` };
+    return {
+      success: true,
+      canonicalDate: targetCanonicalDate,
+      message: `Progres tanggal ${targetCanonicalDate} berhasil diperbarui.`,
+    };
   } catch (error: any) {
     console.error('Error updating cell progress:', error);
     return { success: false, error: error.message || 'Gagal memperbarui progres cell.' };

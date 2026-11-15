@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { exportMatrixToExcel, updateWorkItemStatus } from '@/actions/matrix';
 import { updateDailyCellProgress } from '@/actions/dailyProgress';
 import {
@@ -134,8 +135,10 @@ export default function MatrixClient({
   };
 
   // Edit cell modal state
+  const router = useRouter();
   const [editingCell, setEditingCell] = useState<EditingCellState | null>(null);
   const [newQuantityInput, setNewQuantityInput] = useState<string>('');
+  const [newDateInput, setNewDateInput] = useState<string>('');
   const [savingCell, setSavingCell] = useState<boolean>(false);
 
   // WhatsApp modal state
@@ -172,20 +175,24 @@ export default function MatrixClient({
       currentValue: currentVal,
     });
     setNewQuantityInput(currentVal > 0 ? String(currentVal) : '');
+    setNewDateInput(dateStr);
   };
 
   const handleSaveCell = async (newVal: number) => {
     if (!editingCell) return;
     setSavingCell(true);
+    const targetDate = newDateInput.trim() || editingCell.dateStr;
     const res = await updateDailyCellProgress(
       editingCell.clusterId,
       editingCell.workItemId,
       editingCell.dateStr,
-      newVal
+      newVal,
+      targetDate
     );
     setSavingCell(false);
 
     if (res.success) {
+      const effectiveDate = res.canonicalDate || targetDate;
       setRows((prev) =>
         prev.map((r) => {
           if (r.workItemId === editingCell.workItemId) {
@@ -203,10 +210,9 @@ export default function MatrixClient({
               : 0;
 
             const updatedDaily = { ...r.dailyValues };
+            delete updatedDaily[editingCell.dateStr];
             if (newVal > 0) {
-              updatedDaily[editingCell.dateStr] = newVal;
-            } else {
-              delete updatedDaily[editingCell.dateStr];
+              updatedDaily[effectiveDate] = newVal;
             }
 
             return {
@@ -221,6 +227,7 @@ export default function MatrixClient({
         })
       );
       setEditingCell(null);
+      router.refresh();
     } else {
       alert(res.error || 'Gagal menyimpan perubahan');
     }
@@ -619,20 +626,13 @@ export default function MatrixClient({
                       {/* Date Cells */}
                       {dates.map((dateStr) => {
                         const val = row.dailyValues[dateStr];
-                        const hasMultipleTeams = row.multiTeamDates.includes(dateStr);
                         return (
                           <td
                             key={dateStr}
-                            onClick={hasMultipleTeams ? undefined : () => handleOpenEditCell(row, dateStr)}
-                            title={hasMultipleTeams
-                              ? 'Koreksi dinonaktifkan: tanggal ini memiliki laporan dari beberapa tim.'
-                              : 'Klik untuk mengoreksi volume atau menghapus salah input'}
-                            className={`p-2 text-center border-r border-slate-100 transition select-none group min-w-[65px] ${
-                              hasMultipleTeams
-                                ? 'cursor-not-allowed bg-slate-50 text-slate-400'
-                                : `cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 ${
-                                    val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
-                                  }`
+                            onClick={() => handleOpenEditCell(row, dateStr)}
+                            title="Klik untuk mengoreksi volume atau menghapus salah input"
+                            className={`p-2 text-center border-r border-slate-100 transition select-none group min-w-[65px] cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 ${
+                              val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
                             }`}
                           >
                             <span className="inline-block px-1 rounded">
@@ -701,6 +701,19 @@ export default function MatrixClient({
                     {editingCell.currentValue} {editingCell.unit}
                   </span>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Tanggal Progres (Format dd-mmm-yy)
+                </label>
+                <input
+                  type="text"
+                  value={newDateInput}
+                  onChange={(e) => setNewDateInput(e.target.value)}
+                  placeholder="Contoh: 15-Nov-26"
+                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>

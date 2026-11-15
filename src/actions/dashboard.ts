@@ -4,13 +4,19 @@ import { prisma } from '@/lib/prisma';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import { runInitialSeed } from '@/actions/seed';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
-import { ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
+import {
+  ensureDatabaseRestoredFromNextcloud,
+  normalizeDatabaseReportDates,
+  formatCanonicalReportDate,
+  parseReportDateMs,
+} from '@/lib/dbSync';
 import { calculateClusterProgress } from '@/lib/progressCalculator';
 import sitelistData from '@/data/sitelist.json';
 
 export async function getDashboardData() {
   try {
     await ensureDatabaseRestoredFromNextcloud();
+    await normalizeDatabaseReportDates();
     await cleanupLegacyRawBoqItems();
 
     let project = await prisma.project.findFirst({
@@ -228,20 +234,7 @@ export async function getDashboardData() {
     orderBy: { reportDate: 'asc' },
   });
 
-  const parseReportDate = (d: string) => {
-    const parts = d.split('-');
-    if (parts.length === 3 && isNaN(Number(parts[1]))) {
-      const months: { [k: string]: number } = {
-        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
-      };
-      const day = parseInt(parts[0], 10);
-      const month = months[parts[1]] || 0;
-      const year = 2000 + parseInt(parts[2], 10);
-      return new Date(year, month, day).getTime();
-    }
-    return new Date(d).getTime() || 0;
-  };
+  const parseReportDate = (d: string) => parseReportDateMs(d);
 
   const activityByClusterDate = new Map<
     string,
@@ -257,7 +250,8 @@ export async function getDashboardData() {
   >();
 
   for (const report of allDailyReports) {
-    const key = `${report.clusterId}:${report.reportDate}`;
+    const canonicalDate = formatCanonicalReportDate(report.reportDate);
+    const key = `${report.clusterId}:${canonicalDate}`;
     const reportLatestTime =
       report.updatedAt && report.updatedAt > report.createdAt
         ? report.updatedAt
@@ -268,7 +262,7 @@ export async function getDashboardData() {
       activity = {
         clusterId: report.clusterId,
         cluster: report.cluster,
-        reportDate: report.reportDate,
+        reportDate: canonicalDate,
         createdAt: report.createdAt,
         updatedAt: reportLatestTime,
         teams: new Set<string>(),

@@ -13,6 +13,132 @@ const BACKUP_SUBFOLDER = '_system_db';
 const BACKUP_FILENAME = 'fiberos-state.json';
 const BACKUP_REMOTE_PATH = `${NEXTCLOUD_DIR}/${BACKUP_SUBFOLDER}/${BACKUP_FILENAME}`;
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function formatCanonicalReportDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const trimmed = dateStr.trim();
+  const parts = trimmed.split(/[-/]/);
+
+  // dd-mmm-yy, d-mmm-yy, or dd-mmm-yyyy (e.g., 19-Oct-2026, 9-Nov-26)
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const dayNum = parseInt(parts[0], 10);
+    const monthMatch = MONTHS_SHORT.find(
+      (m) => m.toLowerCase() === parts[1].trim().slice(0, 3).toLowerCase()
+    );
+    const yearNum = parseInt(parts[2], 10);
+    if (!isNaN(dayNum) && monthMatch && !isNaN(yearNum)) {
+      const yy = String(yearNum).slice(-2).padStart(2, '0');
+      return `${String(dayNum).padStart(2, '0')}-${monthMatch}-${yy}`;
+    }
+  }
+
+  // YYYY-MM-DD (e.g., 2026-10-19)
+  if (parts.length === 3 && parts[0].length === 4 && !isNaN(Number(parts[1]))) {
+    const yearNum = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const dayNum = parseInt(parts[2], 10);
+    if (!isNaN(dayNum) && monthIdx >= 0 && monthIdx < 12 && !isNaN(yearNum)) {
+      const yy = String(yearNum).slice(-2).padStart(2, '0');
+      return `${String(dayNum).padStart(2, '0')}-${MONTHS_SHORT[monthIdx]}-${yy}`;
+    }
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  if (parts.length === 3 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1]))) {
+    const dayNum = parseInt(parts[0], 10);
+    const monthIdx = parseInt(parts[1], 10) - 1;
+    const yearNum = parseInt(parts[2], 10);
+    if (!isNaN(dayNum) && monthIdx >= 0 && monthIdx < 12 && !isNaN(yearNum)) {
+      const yy = String(yearNum).slice(-2).padStart(2, '0');
+      return `${String(dayNum).padStart(2, '0')}-${MONTHS_SHORT[monthIdx]}-${yy}`;
+    }
+  }
+
+  return trimmed;
+}
+
+export function parseReportDateMs(dateStr: string): number {
+  if (!dateStr) return 0;
+  const canonical = formatCanonicalReportDate(dateStr);
+  const parts = canonical.split('-');
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const day = parseInt(parts[0], 10);
+    const monthIdx = MONTHS_SHORT.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase());
+    const rawYear = parseInt(parts[2], 10);
+    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+    if (!isNaN(day) && monthIdx >= 0 && !isNaN(year)) {
+      return new Date(year, monthIdx, day).getTime();
+    }
+  }
+  return new Date(dateStr).getTime() || 0;
+}
+
+/**
+ * Normalizes any existing DailyReport.reportDate records in SQLite (e.g. "19-Oct-2026" -> "19-Oct-26",
+ * "9-Nov-26" -> "09-Nov-26") and backs up the cleaned state to Nextcloud.
+ */
+export async function normalizeDatabaseReportDates(): Promise<void> {
+  try {
+    const reports = await prisma.dailyReport.findMany({
+      include: { items: true },
+    });
+
+    let changedCount = 0;
+
+    for (const report of reports) {
+      const canonical = formatCanonicalReportDate(report.reportDate);
+      if (!canonical || canonical === report.reportDate) continue;
+
+      const teamName = report.teamName || 'Tim FTTH Blora';
+      const existingTarget = await prisma.dailyReport.findUnique({
+        where: {
+          clusterId_reportDate_teamName: {
+            clusterId: report.clusterId,
+            reportDate: canonical,
+            teamName,
+          },
+        },
+        include: { items: true },
+      });
+
+      if (existingTarget && existingTarget.id !== report.id) {
+        for (const item of report.items) {
+          const prev = existingTarget.items.find((i) => i.workItemId === item.workItemId);
+          const mergedQty = prev ? Math.max(prev.quantity, item.quantity) : item.quantity;
+          await prisma.dailyProgressItem.upsert({
+            where: {
+              dailyReportId_workItemId: {
+                dailyReportId: existingTarget.id,
+                workItemId: item.workItemId,
+              },
+            },
+            update: { quantity: mergedQty },
+            create: {
+              dailyReportId: existingTarget.id,
+              workItemId: item.workItemId,
+              quantity: mergedQty,
+            },
+          });
+        }
+        await prisma.dailyReport.delete({ where: { id: report.id } });
+      } else {
+        await prisma.dailyReport.update({
+          where: { id: report.id },
+          data: { reportDate: canonical },
+        });
+      }
+      changedCount++;
+    }
+
+    if (changedCount > 0) {
+      await backupDatabaseToNextcloud();
+    }
+  } catch (err) {
+    console.warn('Error normalizing database report dates:', err);
+  }
+}
+
 let hasRestoredInThisProcess = false;
 let isRestoring = false;
 
@@ -205,11 +331,12 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
           const restoredReportIds: string[] = [];
           for (const rep of cl.dailyReports) {
             const teamName = rep.teamName || 'Tim FTTH Blora';
+            const normalizedReportDate = formatCanonicalReportDate(rep.reportDate);
             const dbReport = await prisma.dailyReport.upsert({
               where: {
                 clusterId_reportDate_teamName: {
                   clusterId: dbCluster.id,
-                  reportDate: rep.reportDate,
+                  reportDate: normalizedReportDate,
                   teamName,
                 },
               },
@@ -223,7 +350,7 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
               create: {
                 id: rep.id,
                 clusterId: dbCluster.id,
-                reportDate: rep.reportDate,
+                reportDate: normalizedReportDate,
                 reporterName: rep.reporterName,
                 teamName,
                 weather: rep.weather,
@@ -288,6 +415,7 @@ export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
     }
 
     hasRestoredInThisProcess = true;
+    await normalizeDatabaseReportDates();
   } catch (err) {
     console.error('Error restoring database from Nextcloud:', err);
   } finally {

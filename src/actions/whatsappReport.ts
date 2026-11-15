@@ -46,7 +46,8 @@ function parseReportDateMs(d: string): number {
     };
     const day = parseInt(parts[0], 10);
     const month = months[parts[1]] || 0;
-    const year = 2000 + parseInt(parts[2], 10);
+    const rawYear = parseInt(parts[2], 10);
+    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
     return new Date(year, month, day).getTime();
   }
   return new Date(d).getTime() || 0;

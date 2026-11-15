@@ -3,11 +3,18 @@
 import { prisma } from '@/lib/prisma';
 import * as excel from 'xlsx';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
-import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
+import {
+  backupDatabaseToNextcloud,
+  ensureDatabaseRestoredFromNextcloud,
+  normalizeDatabaseReportDates,
+  formatCanonicalReportDate,
+  parseReportDateMs,
+} from '@/lib/dbSync';
 
 export async function getMatrixData(filterClusterId?: string) {
   try {
     await ensureDatabaseRestoredFromNextcloud();
+    await normalizeDatabaseReportDates();
     await cleanupLegacyRawBoqItems();
 
     const whereClause = filterClusterId && filterClusterId !== 'ALL' ? { id: filterClusterId } : {};
@@ -33,23 +40,9 @@ export async function getMatrixData(filterClusterId?: string) {
     select: { clusterId: true, reportDate: true, teamName: true },
   });
 
-  const dates = Array.from(new Set(reportSummaries.map((report) => report.reportDate))).sort((a, b) => {
-    const parseDate = (d: string) => {
-      const parts = d.split('-');
-      if (parts.length === 3 && isNaN(Number(parts[1]))) {
-        const months: { [k: string]: number } = {
-          Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-          Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11
-        };
-        const day = parseInt(parts[0]);
-        const month = months[parts[1]] ?? 0;
-        const year = 2000 + parseInt(parts[2]);
-        return new Date(year, month, day).getTime();
-      }
-      return new Date(d).getTime();
-    };
-    return parseDate(a) - parseDate(b);
-  });
+  const dates = Array.from(
+    new Set(reportSummaries.map((report) => formatCanonicalReportDate(report.reportDate)))
+  ).sort((a, b) => parseReportDateMs(a) - parseReportDateMs(b));
 
   const teamsByClusterDate = new Map<string, Set<string>>();
   for (const report of reportSummaries) {
@@ -100,7 +93,7 @@ export async function getMatrixData(filterClusterId?: string) {
       let totalInstalled = 0;
 
       for (const prog of item.progressList) {
-        const d = prog.dailyReport.reportDate;
+        const d = formatCanonicalReportDate(prog.dailyReport.reportDate);
         dailyValues[d] = (dailyValues[d] || 0) + prog.quantity;
         totalInstalled += prog.quantity;
       }

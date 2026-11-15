@@ -11,6 +11,26 @@ const authHeader = `Basic ${Buffer.from(`${NEXTCLOUD_USER}:${NEXTCLOUD_PASSWORD}
 const davBaseUrl = `${NEXTCLOUD_URL}/remote.php/dav/files/${encodeURIComponent(NEXTCLOUD_USER)}`;
 const BACKUP_REMOTE_PATH = `${NEXTCLOUD_DIR}/_system_db/fiberos-state.json`;
 
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function formatCanonicalReportDate(dateStr) {
+  if (!dateStr) return '';
+  const trimmed = String(dateStr).trim();
+  const parts = trimmed.split(/[-/]/);
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const dayNum = parseInt(parts[0], 10);
+    const monthMatch = MONTHS_SHORT.find(
+      (m) => m.toLowerCase() === parts[1].trim().slice(0, 3).toLowerCase()
+    );
+    const yearNum = parseInt(parts[2], 10);
+    if (!isNaN(dayNum) && monthMatch && !isNaN(yearNum)) {
+      const yy = String(yearNum).slice(-2).padStart(2, '0');
+      return `${String(dayNum).padStart(2, '0')}-${monthMatch}-${yy}`;
+    }
+  }
+  return trimmed;
+}
+
 async function main() {
   console.log('☁️ Checking Nextcloud for persistent database snapshot...');
   try {
@@ -142,11 +162,12 @@ async function main() {
           const restoredReportIds = [];
           for (const rep of cl.dailyReports) {
             const teamName = rep.teamName || 'Tim FTTH Blora';
+            const normalizedReportDate = formatCanonicalReportDate(rep.reportDate);
             const dbReport = await prisma.dailyReport.upsert({
               where: {
                 clusterId_reportDate_teamName: {
                   clusterId: dbCluster.id,
-                  reportDate: rep.reportDate,
+                  reportDate: normalizedReportDate,
                   teamName,
                 },
               },
@@ -160,7 +181,7 @@ async function main() {
               create: {
                 id: rep.id,
                 clusterId: dbCluster.id,
-                reportDate: rep.reportDate,
+                reportDate: normalizedReportDate,
                 reporterName: rep.reporterName,
                 teamName,
                 weather: rep.weather,
