@@ -2,12 +2,11 @@ import Link from 'next/link';
 import { getDashboardData } from '@/actions/dashboard';
 import SeedButton from '@/components/SeedButton';
 import DashboardSummaryClient from '@/components/DashboardSummaryClient';
+import RecentReportsCard from '@/components/RecentReportsCard';
 import { 
-  Clock, 
   PlusCircle, 
   FileSpreadsheet, 
   Upload, 
-  Edit3,
   MapPin
 } from 'lucide-react';
 
@@ -92,49 +91,7 @@ export default async function DashboardPage() {
       />
 
       {/* Recent Updates / Activity Log */}
-      {recentReports.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Riwayat Laporan Terakhir</h2>
-              <p className="text-xs text-slate-500">Ringkasan progres harian per cluster</p>
-            </div>
-            <Clock className="w-5 h-5 text-slate-400" />
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {recentReports.slice(0, 10).map((rep) => (
-              <div key={rep.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-sm text-slate-800">{rep.cluster.name}</span>
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">
-                      {rep.reportDate}
-                    </span>
-                    {rep.teamName && (
-                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[11px] font-medium">
-                        {rep.teamName}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
-                    {rep.items.length} item terupdate
-                  </span>
-                  <Link
-                    href={`/daily-input?clusterId=${rep.clusterId}&date=${encodeURIComponent(rep.reportDate)}`}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 px-2.5 py-1 rounded-lg transition"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <RecentReportsCard reports={recentReports} />
     </div>
   );
 }

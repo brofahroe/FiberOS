@@ -6,7 +6,7 @@ export const revalidate = 0;
 export default async function DailyInputPage({
   searchParams,
 }: {
-  searchParams: { clusterId?: string; date?: string };
+  searchParams: { clusterId?: string; date?: string; team?: string };
 }) {
   let clusters: any[] = [];
   try {
@@ -28,6 +28,7 @@ export default async function DailyInputPage({
         clusters={clusters}
         initialClusterId={searchParams.clusterId}
         initialDate={searchParams.date}
+        initialTeam={searchParams.team}
       />
     </div>
   );

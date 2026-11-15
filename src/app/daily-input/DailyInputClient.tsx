@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getClusterItemsForForm, submitDailyProgress, getDailyReportTeams, getExistingDailyReport, deleteDailyReportByDate } from '@/actions/dailyProgress';
+import { getClusterItemsForForm, submitDailyProgress, getDailyReportTeams, getExistingDailyReport, deleteDailyReportByDate, renameDailyReportTeam } from '@/actions/dailyProgress';
 import { compressImage } from '@/lib/imageCompression';
 import { 
   Building2, 
@@ -24,6 +24,7 @@ import {
   X,
   Trash2,
   Edit3,
+  Pencil,
   MessageSquare
 } from 'lucide-react';
 import WhatsAppReportModal from '@/components/WhatsAppReportModal';
@@ -114,10 +115,12 @@ export default function DailyInputClient({
   clusters,
   initialClusterId,
   initialDate,
+  initialTeam,
 }: {
   clusters: ClusterOption[];
   initialClusterId?: string;
   initialDate?: string;
+  initialTeam?: string;
 }) {
   const router = useRouter();
 
@@ -135,7 +138,7 @@ export default function DailyInputClient({
   );
   const datePickerRef = useRef<HTMLDivElement | null>(null);
   const [reporterName, setReporterName] = useState<string>('');
-  const [teamName, setTeamName] = useState<string>('');
+  const [teamName, setTeamName] = useState<string>(initialTeam || '');
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
   const [teamListError, setTeamListError] = useState<string | null>(null);
   const [weather, setWeather] = useState<string>('Cerah');
@@ -299,6 +302,10 @@ export default function DailyInputClient({
 
   // Edit / correction mode state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
+  const [showInlineRename, setShowInlineRename] = useState<boolean>(false);
+  const [renameTeamInput, setRenameTeamInput] = useState<string>('');
+  const [renamingTeam, setRenamingTeam] = useState<boolean>(false);
   const [checkingReport, setCheckingReport] = useState<boolean>(false);
   const [reportLookupError, setReportLookupError] = useState<string | null>(null);
   const [deletingReport, setDeletingReport] = useState<boolean>(false);
@@ -310,9 +317,9 @@ export default function DailyInputClient({
       const savedReporter = localStorage.getItem('fiberos_reporter');
       const savedTeam = localStorage.getItem('fiberos_team');
       if (savedReporter) setReporterName(savedReporter);
-      if (savedTeam) setTeamName(savedTeam);
+      if (!initialTeam && savedTeam) setTeamName(savedTeam);
     }
-  }, []);
+  }, [initialTeam]);
 
   // Fetch items whenever cluster changes
   useEffect(() => {
@@ -392,6 +399,8 @@ export default function DailyInputClient({
       setReportLookupError(null);
       setMessage(null);
       setIsEditMode(false);
+      setEditingReportId(null);
+      setShowInlineRename(false);
       setItems((prev) => prev.map((it) => ({ ...it, todayQty: '' })));
       setPhotos([]);
       setNotes('');
@@ -403,6 +412,8 @@ export default function DailyInputClient({
     setReportLookupError(null);
     setMessage(null);
     setIsEditMode(false);
+    setEditingReportId(null);
+    setShowInlineRename(false);
     setWeather('Cerah');
     setNotes('');
     setPhotos([]);
@@ -420,6 +431,8 @@ export default function DailyInputClient({
 
       if (res && res.exists && res.report) {
         setIsEditMode(true);
+        setEditingReportId(res.report.id);
+        setRenameTeamInput(res.report.teamName);
         setReporterName(res.report.reporterName);
         setTeamName(res.report.teamName);
         setWeather(res.report.weather);
@@ -440,6 +453,7 @@ export default function DailyInputClient({
         );
       } else {
         setIsEditMode(false);
+        setEditingReportId(null);
       }
     });
 
@@ -447,6 +461,45 @@ export default function DailyInputClient({
       isMounted = false;
     };
   }, [selectedClusterId, reportDate, teamName, loadingItems]);
+
+  const handleRenameCurrentReportTeam = async () => {
+    if (!editingReportId) return;
+    const trimmed = renameTeamInput.trim();
+    if (!trimmed) {
+      setMessage({ type: 'error', text: 'Nama Tim Pelaksana baru wajib diisi.' });
+      return;
+    }
+    if (trimmed === teamName.trim()) {
+      setShowInlineRename(false);
+      return;
+    }
+
+    setRenamingTeam(true);
+    setMessage(null);
+    const oldTeam = teamName.trim();
+    const res = await renameDailyReportTeam({
+      reportId: editingReportId,
+      newTeamName: trimmed,
+      scope: 'SINGLE',
+    });
+    setRenamingTeam(false);
+
+    if (res.success) {
+      setShowInlineRename(false);
+      setAvailableTeams((prev) => {
+        const next = prev.map((t) => (t === oldTeam ? trimmed : t));
+        return next.includes(trimmed) ? next : [...next, trimmed];
+      });
+      setTeamName(trimmed);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('fiberos_team', trimmed);
+      }
+      setMessage({ type: 'success', text: res.message || `Nama tim berhasil diubah menjadi "${trimmed}".` });
+      router.refresh();
+    } else {
+      setMessage({ type: 'error', text: res.error || 'Gagal mengubah nama tim.' });
+    }
+  };
 
   const handleDeleteReport = async () => {
     const clusterName = clusters.find((c) => c.id === selectedClusterId)?.name || 'Cluster';
@@ -932,32 +985,81 @@ export default function DailyInputClient({
         )}
 
         {isEditMode && !checkingReport && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in duration-200">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-              <div>
-                <span className="font-bold text-xs sm:text-sm block text-amber-950">
-                  Mode Koreksi / Edit Laporan Aktif
-                </span>
-                <p className="text-[11px] text-amber-800 mt-0.5">
-                  Ditemukan laporan tim <strong>{teamName}</strong> untuk tanggal <strong>{reportDate}</strong>. Anda dapat mengoreksi volume pekerjaan di bawah, atau menghapus laporan tim ini.
-                </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3 text-amber-900 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-bold text-xs sm:text-sm block text-amber-950">
+                    Mode Koreksi / Edit Laporan Aktif
+                  </span>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    Ditemukan laporan tim <strong>{teamName}</strong> untuk tanggal <strong>{reportDate}</strong>. Anda dapat mengoreksi volume pekerjaan di bawah, mengganti nama tim, atau menghapus laporan tim ini.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {editingReportId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenameTeamInput(teamName);
+                      setShowInlineRename((prev) => !prev);
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Ubah Nama Tim</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleDeleteReport}
+                  disabled={deletingReport}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                >
+                  {deletingReport ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>Hapus Laporan Ini</span>
+                </button>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDeleteReport}
-              disabled={deletingReport}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shrink-0 transition shadow-sm"
-            >
-              {deletingReport ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="w-3.5 h-3.5" />
-              )}
-              <span>Hapus Laporan Ini</span>
-            </button>
+            {showInlineRename && editingReportId && (
+              <div className="pt-3 border-t border-amber-200/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <input
+                  type="text"
+                  value={renameTeamInput}
+                  onChange={(e) => setRenameTeamInput(e.target.value)}
+                  placeholder="Masukkan nama tim baru..."
+                  className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={renamingTeam}
+                    onClick={handleRenameCurrentReportTeam}
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-60"
+                  >
+                    {renamingTeam && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    <span>Simpan Nama Tim</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={renamingTeam}
+                    onClick={() => setShowInlineRename(false)}
+                    className="px-3 py-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-semibold transition"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

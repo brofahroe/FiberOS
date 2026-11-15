@@ -641,6 +641,109 @@ export async function deleteDailyReportByDate(clusterId: string, reportDate: str
   }
 }
 
+export async function renameDailyReportTeam(input: {
+  reportId: string;
+  newTeamName: string;
+  scope?: 'SINGLE' | 'CLUSTER' | 'ALL';
+}) {
+  try {
+    const newTeamName = input.newTeamName.trim();
+    if (!newTeamName) {
+      return { success: false, error: 'Nama Tim Pelaksana baru wajib diisi.' };
+    }
+
+    const source = await prisma.dailyReport.findUnique({
+      where: { id: input.reportId },
+      include: {
+        cluster: { select: { name: true } },
+      },
+    });
+
+    if (!source) {
+      return { success: false, error: 'Laporan tidak ditemukan.' };
+    }
+
+    const oldTeamName = source.teamName?.trim() || '';
+    if (oldTeamName === newTeamName) {
+      return {
+        success: true,
+        updatedCount: 0,
+        newTeamName,
+        message: 'Nama tim sudah sama, tidak ada perubahan.',
+      };
+    }
+
+    const scope = input.scope || 'SINGLE';
+    const targetReports =
+      scope === 'SINGLE' || !oldTeamName
+        ? [source]
+        : await prisma.dailyReport.findMany({
+            where:
+              scope === 'CLUSTER'
+                ? { clusterId: source.clusterId, teamName: oldTeamName }
+                : { teamName: oldTeamName },
+            include: {
+              cluster: { select: { name: true } },
+            },
+          });
+
+    if (targetReports.length === 0) {
+      return { success: false, error: 'Tidak ada laporan yang cocok untuk diubah.' };
+    }
+
+    // Check unique constraint [clusterId, reportDate, teamName] across canonical/variant dates
+    const existingWithTargetName = await prisma.dailyReport.findMany({
+      where: { teamName: newTeamName },
+      select: { id: true, clusterId: true, reportDate: true },
+    });
+
+    const targetIds: string[] = [];
+    for (const target of targetReports) {
+      const variants = getDateVariants(target.reportDate);
+      const conflict = existingWithTargetName.find(
+        (other) =>
+          other.id !== target.id &&
+          other.clusterId === target.clusterId &&
+          variants.includes(other.reportDate)
+      );
+      if (conflict) {
+        return {
+          success: false,
+          error: `Tidak dapat mengganti ke "${newTeamName}": pada cluster ${target.cluster.name} tanggal ${target.reportDate} sudah ada laporan dengan nama tim tersebut.`,
+        };
+      }
+      targetIds.push(target.id);
+    }
+
+    await prisma.$transaction([
+      prisma.dailyReport.updateMany({
+        where: { id: { in: targetIds } },
+        data: { teamName: newTeamName },
+      }),
+    ]);
+
+    revalidatePath('/');
+    revalidatePath('/daily-input');
+    revalidatePath('/matrix');
+    revalidatePath('/clusters');
+    revalidatePath('/sitelist');
+
+    return {
+      success: true,
+      updatedCount: targetIds.length,
+      newTeamName,
+      message:
+        targetIds.length > 1
+          ? `Berhasil mengubah nama tim pada ${targetIds.length} laporan menjadi "${newTeamName}".`
+          : `Nama tim berhasil diubah menjadi "${newTeamName}".`,
+    };
+  } catch (error: unknown) {
+    console.error('Error renaming daily report team:', error);
+    const errMsg = error instanceof Error ? error.message : 'Gagal mengubah nama tim laporan.';
+    return { success: false, error: errMsg };
+  }
+}
+
 export async function getDailyReportsHistory(limit: number = 50) {
   try {
     const reports = await prisma.dailyReport.findMany({

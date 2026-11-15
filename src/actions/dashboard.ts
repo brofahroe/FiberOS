@@ -245,6 +245,7 @@ export async function getDashboardData() {
       createdAt: Date;
       updatedAt: Date;
       teams: Set<string>;
+      reportTeams: Array<{ reportId: string; teamName: string; itemCount: number }>;
       itemIds: Set<string>;
     }
   >();
@@ -266,6 +267,7 @@ export async function getDashboardData() {
         createdAt: report.createdAt,
         updatedAt: reportLatestTime,
         teams: new Set<string>(),
+        reportTeams: [],
         itemIds: new Set<string>(),
       };
       activityByClusterDate.set(key, activity);
@@ -278,9 +280,15 @@ export async function getDashboardData() {
       }
     }
 
+    const displayTeamName = report.teamName?.trim() || 'Tanpa Nama Tim';
     if (report.teamName?.trim()) {
       activity.teams.add(report.teamName.trim());
     }
+    activity.reportTeams.push({
+      reportId: report.id,
+      teamName: displayTeamName,
+      itemCount: report.items.length,
+    });
 
     for (const item of report.items) {
       activity.itemIds.add(item.workItemId);
@@ -300,13 +308,14 @@ export async function getDashboardData() {
       }
       return timeDiff;
     })
-    .slice(0, 15)
+    .slice(0, 200)
     .map((activity) => ({
       id: `${activity.clusterId}-${activity.reportDate}`,
       clusterId: activity.clusterId,
       cluster: activity.cluster,
       reportDate: activity.reportDate,
       teamName: Array.from(activity.teams).join(', '),
+      reportTeams: activity.reportTeams,
       items: Array.from(activity.itemIds, (workItemId) => ({ workItemId })),
     }));
 
