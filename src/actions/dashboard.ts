@@ -79,8 +79,8 @@ export async function getDashboardData() {
   const defaultCats = [
     { key: 'POLE', label: 'Tiang (Poles)', unit: 'Btg' },
     { key: 'CABLE', label: 'Penarikan Kabel', unit: 'Meter' },
-    { key: 'FAT', label: 'Terminasi FAT', unit: 'Unit' },
-    { key: 'FDT', label: 'Terminasi FDT', unit: 'Unit' },
+    { key: 'FAT', label: 'Terminasi FAT', unit: 'Pcs' },
+    { key: 'FDT', label: 'Terminasi FDT', unit: 'Pcs' },
     { key: 'ACCESSORY', label: 'Aksesoris & Fixture', unit: 'Pcs' },
   ];
 

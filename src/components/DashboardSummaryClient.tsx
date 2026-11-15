@@ -69,8 +69,8 @@ export default function DashboardSummaryClient({
     const catDefs = [
       { key: 'POLE', displayName: 'Tiang (Poles)', unit: 'Btg', icon: HardHat },
       { key: 'CABLE', displayName: 'Penarikan Kabel', unit: 'Meter', icon: Cable },
-      { key: 'FAT', displayName: 'Terminasi FAT', unit: 'Unit', icon: Box },
-      { key: 'FDT', displayName: 'Terminasi FDT', unit: 'Unit', icon: Cpu },
+      { key: 'FAT', displayName: 'Terminasi FAT', unit: 'Pcs', icon: Box },
+      { key: 'FDT', displayName: 'Terminasi FDT', unit: 'Pcs', icon: Cpu },
     ];
 
     const computedCategories = catDefs.map((def) => {

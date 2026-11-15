@@ -72,7 +72,19 @@ export function normalizeItemClassification(item: WorkItemCalculationInput): {
     subCategory = 'FDT';
   } else if (sub === 'JC' || cat === 'JC' || name.includes('joint closure') || name.includes('closure') || name.includes('jc')) {
     subCategory = 'JC';
-  } else if (sub === 'ACC' || cat === 'ACCESSORY' || name.includes('acc') || name.includes('perapihan') || name.includes('clamp') || name.includes('fixture') || name.includes('hanger')) {
+  } else if (
+    sub === 'ACC' ||
+    cat === 'ACCESSORY' ||
+    cat === 'SELING' ||
+    name.includes('seling') ||
+    name.includes('sling') ||
+    name.includes('strand wire') ||
+    name.includes('acc') ||
+    name.includes('perapihan') ||
+    name.includes('clamp') ||
+    name.includes('fixture') ||
+    name.includes('hanger')
+  ) {
     subCategory = 'ACC';
   }
 
@@ -254,4 +266,26 @@ export function calculateClusterProgress(items: WorkItemCalculationInput[]): Clu
     totalWeightedPercentage,
   };
 }
+
+/**
+ * Daftar item BOQ standar mengacu pada BOQ-list.xlsx
+ */
+export const DEFAULT_BOQ_WORK_ITEMS = [
+  { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "2.5"', unit: 'Btg', sortOrder: 1 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "3"', unit: 'Btg', sortOrder: 2 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 3 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 4 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 5 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 6 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 7 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 8 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Pcs', sortOrder: 9 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Pcs', sortOrder: 10 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Pcs', sortOrder: 11 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'SELING', subCategory: 'ACC', weight: 10, itemName: 'Seling', unit: 'Meter', sortOrder: 12 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 100 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 101 },
+  { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 102 },
+] as const;
+
 

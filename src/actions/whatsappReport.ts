@@ -326,7 +326,7 @@ export async function getWhatsAppReportData(
     const clrCable = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
     const clrFdt = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'FDT' || cat === 'FDT' || name.includes('fdt'));
     const clrFat = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'FAT' || cat === 'FAT' || name.includes('fat'));
-    const clrWireSling = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'ACC' || cat === 'ACCESSORY' || name.includes('wire') || name.includes('sling') || name.includes('acc') || name.includes('perapihan'));
+    const clrWireSling = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'ACC' || cat === 'ACCESSORY' || cat === 'SELING' || name.includes('seling') || name.includes('wire') || name.includes('sling') || name.includes('acc') || name.includes('perapihan'));
 
     // Subfeeder items
     const sfPole = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'POLE' || cat === 'POLE' || name.includes('pole') || name.includes('tiang'));

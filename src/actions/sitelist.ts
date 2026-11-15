@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import sitelistData from '@/data/sitelist.json';
-import { calculateClusterProgress } from '@/lib/progressCalculator';
+import { calculateClusterProgress, DEFAULT_BOQ_WORK_ITEMS } from '@/lib/progressCalculator';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
 import {
   backupDatabaseToNextcloud,
@@ -64,22 +64,7 @@ export interface RegionSummaryItem {
   fdtBoq: number;
 }
 
-const DEFAULT_WORK_ITEMS = [
-  { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "2.5"', unit: 'Unit', sortOrder: 1 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "3"', unit: 'Unit', sortOrder: 2 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "4"', unit: 'Unit', sortOrder: 3 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 4 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 5 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 6 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 7 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 8 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Unit', sortOrder: 9 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Unit', sortOrder: 10 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Unit', sortOrder: 11 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Unit', sortOrder: 100 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 101 },
-  { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Unit', sortOrder: 102 },
-];
+const DEFAULT_WORK_ITEMS = DEFAULT_BOQ_WORK_ITEMS;
 
 export async function getSitelistData() {
   try {

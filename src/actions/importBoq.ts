@@ -21,8 +21,8 @@ export interface ParsedBoqItem {
   sourceItemName: string; // Kolom "Item Pekerjaan" dari BOQ-list.xlsx / Excel APD
   boqName: string;        // Kolom "BOQ" dari BOQ-list.xlsx (nama pendek standar di aplikasi)
   itemName: string;       // Disimpan ke WorkItem.itemName (sama dengan boqName)
-  category: string;       // Kolom "Kategori" dari BOQ-list.xlsx (FAT, FDT, JC, CABLE, POLE)
-  unit: string;           // Kolom "Satuan" dari BOQ-list.xlsx (Unit, Meter)
+  category: string;       // Kolom "Kategori" dari BOQ-list.xlsx (FAT, FDT, JC, CABLE, POLE, SELING)
+  unit: string;           // Kolom "Satuan" dari BOQ-list.xlsx (Btg, Pcs, Meter)
   quantity: number;       // Volume BOQ dari file Excel APD
 }
 
@@ -71,11 +71,18 @@ export async function getBoqReferenceRules(): Promise<BoqReferenceRule[]> {
         const itemPekerjaan = String(r['Item Pekerjaan'] || '').trim();
         const boq = String(r['BOQ'] || '').trim();
         const kategori = String(r['Kategori'] || '').trim().toUpperCase();
-        const satuan = String(r['Satuan'] || '').trim();
+        const satuanRaw = String(r['Satuan'] || '').trim();
         if (itemPekerjaan && boq) {
           const fallbackMatch = boqListFallback.find(
             (f) => normalizeText(f.itemPekerjaan) === normalizeText(itemPekerjaan)
           );
+          const resolvedKategori = kategori || fallbackMatch?.kategori || 'OTHER';
+          let resolvedSatuan = satuanRaw || fallbackMatch?.satuan || 'Pcs';
+          if (resolvedKategori === 'POLE') {
+            resolvedSatuan = 'Btg';
+          } else if (resolvedSatuan.toLowerCase() === 'unit') {
+            resolvedSatuan = 'Pcs';
+          }
           rules.push({
             itemPekerjaan,
             aliases: fallbackMatch?.aliases || [
@@ -83,8 +90,8 @@ export async function getBoqReferenceRules(): Promise<BoqReferenceRule[]> {
               itemPekerjaan.replace(/\s+pole$/i, '').trim(),
             ],
             boq,
-            kategori: kategori || fallbackMatch?.kategori || 'OTHER',
-            satuan: satuan || fallbackMatch?.satuan || 'Unit',
+            kategori: resolvedKategori,
+            satuan: resolvedSatuan,
           });
         }
       }

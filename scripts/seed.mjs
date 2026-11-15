@@ -15,8 +15,7 @@ function detectCategory(itemName) {
 
 function detectUnit(itemName, category) {
   if (category === 'POLE') return 'Btg';
-  if (category === 'CABLE') return 'Meter';
-  if (category === 'FAT' || category === 'FDT') return 'Unit';
+  if (category === 'CABLE' || category === 'SELING') return 'Meter';
   return 'Pcs';
 }
 

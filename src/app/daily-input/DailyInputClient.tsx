@@ -629,6 +629,7 @@ export default function DailyInputClient({
     { key: 'FAT', label: 'FAT (Fiber Access Terminal)', icon: Box },
     { key: 'FDT', label: 'FDT (Fiber Distribution Terminal)', icon: Cpu },
     { key: 'JC', label: 'Joint Closure (JC)', icon: Cpu },
+    { key: 'SELING', label: 'Seling / Strand Wire', icon: Layers },
     { key: 'ACCESSORY', label: 'Aksesoris & Perapihan', icon: Layers },
     { key: 'OTHER', label: 'Item Lainnya', icon: Layers },
   ];
@@ -1128,7 +1129,7 @@ export default function DailyInputClient({
             {categoriesList.map((cat) => {
               const catItems = items.filter((it) => {
                 const matchesScope = activeScopeTab === 'ALL' || it.scope === activeScopeTab;
-                return matchesScope && it.category === cat.key;
+                return matchesScope && (it.category || '').toUpperCase() === cat.key;
               });
               if (catItems.length === 0) return null;
 

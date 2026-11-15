@@ -86,31 +86,49 @@ async function main() {
       let workType = 'CW';
       let subCategory = 'POLE';
       let weight = 40;
+      let unit = item.unit;
 
       if (cat === 'POLE' || name.includes('pole') || name.includes('tiang')) {
         workType = 'CW';
         subCategory = 'POLE';
         weight = scope === 'SUBFEEDER' ? 50 : 40;
+        unit = 'Btg';
       } else if (cat === 'CABLE' || name.includes('kabel') || name.includes('cable')) {
         workType = 'CW';
         subCategory = 'CABLE';
         weight = 20;
+        unit = 'Meter';
       } else if (cat === 'FAT' || name.includes('fat')) {
         workType = 'EL';
         subCategory = 'FAT';
         weight = 25;
+        if (!unit || unit.trim().toLowerCase() === 'unit') unit = 'Pcs';
       } else if (cat === 'FDT' || name.includes('fdt')) {
         workType = 'EL';
         subCategory = 'FDT';
         weight = 5;
+        if (!unit || unit.trim().toLowerCase() === 'unit') unit = 'Pcs';
       } else if (cat === 'JC' || name.includes('joint closure') || name.includes('jc')) {
         workType = 'EL';
         subCategory = 'JC';
         weight = 20;
-      } else if (cat === 'ACCESSORY' || name.includes('acc') || name.includes('perapihan') || name.includes('clamp')) {
+        if (!unit || unit.trim().toLowerCase() === 'unit') unit = 'Pcs';
+      } else if (
+        cat === 'ACCESSORY' ||
+        cat === 'SELING' ||
+        name.includes('seling') ||
+        name.includes('sling') ||
+        name.includes('strand wire') ||
+        name.includes('acc') ||
+        name.includes('perapihan') ||
+        name.includes('clamp')
+      ) {
         workType = 'CW';
         subCategory = 'ACC';
         weight = 10;
+        if (!unit || unit.trim().toLowerCase() === 'unit') unit = 'Pcs';
+      } else if (unit && unit.trim().toLowerCase() === 'unit') {
+        unit = 'Pcs';
       }
 
       await prisma.workItem.update({
@@ -120,6 +138,37 @@ async function main() {
           workType,
           subCategory,
           weight,
+          unit,
+        },
+      });
+    }
+
+    // 2. Ensure new BOQ item "Seling" (from BOQ-list.xlsx) exists on cluster
+    const hasSeling = cluster.workItems.some(
+      (wi) => wi.scope === 'CLUSTER' && wi.itemName.trim().toLowerCase() === 'seling'
+    );
+    if (!hasSeling) {
+      await prisma.workItem.upsert({
+        where: {
+          clusterId_scope_itemName: {
+            clusterId: cluster.id,
+            scope: 'CLUSTER',
+            itemName: 'Seling',
+          },
+        },
+        update: {},
+        create: {
+          clusterId: cluster.id,
+          scope: 'CLUSTER',
+          workType: 'CW',
+          category: 'SELING',
+          subCategory: 'ACC',
+          weight: 10,
+          itemName: 'Seling',
+          unit: 'Meter',
+          boq: 0,
+          status: 'ONGOING',
+          sortOrder: 12,
         },
       });
     }
