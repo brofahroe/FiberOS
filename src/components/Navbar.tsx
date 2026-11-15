@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, FileSpreadsheet, PlusCircle, Upload, Layers, MapPin } from 'lucide-react';
+import FiberOsLogo from '@/components/FiberOsLogo';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -22,15 +23,13 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo / Brand */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              ⚡
-            </div>
+            <FiberOsLogo className="w-10 h-10 drop-shadow-sm group-hover:scale-105 transition-transform" />
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-slate-900 via-blue-700 to-sky-600 bg-clip-text text-transparent">
                   FiberOS
                 </span>
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold tracking-wide bg-blue-100 text-blue-700 rounded-md">
+                <span className="px-1.5 py-0.5 text-[10px] font-bold tracking-wider bg-sky-100 text-sky-800 border border-sky-200 rounded-md">
                   FTTH
                 </span>
               </div>

@@ -1,16 +1,22 @@
 {
   "name": "FiberOS - FTTH Rollout & Progress Management",
   "short_name": "FiberOS",
-  "description": "Sistem Manajemen Progres Harian & Rollout FTTH ZTE MoraRepublic Kedungtuban Blora",
+  "description": "Sistem Manajemen Progres Harian & Rollout FTTH GCI-MTI Blora",
   "start_url": "/",
   "id": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "theme_color": "#1e40af",
   "categories": ["productivity", "business", "utilities"],
   "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "/icons/icon-192x192.png",
       "sizes": "192x192",

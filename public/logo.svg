@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 160" fill="none">
+  <defs>
+    <linearGradient id="bgGradH" x1="0" y1="160" x2="160" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#1e40af" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="fiberCyanH" x1="24" y1="136" x2="136" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+    <linearGradient id="boltGradH" x1="95" y1="55" x2="135" y2="130" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+
+  <!-- Icon Badge -->
+  <rect x="10" y="10" width="140" height="140" rx="34" fill="url(#bgGradH)" />
+  <path d="M64 122V98H92" stroke="#38bdf8" stroke-opacity="0.75" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M45 122V44H108" stroke="url(#fiberCyanH)" stroke-width="11.5" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M45 80H88" stroke="url(#fiberCyanH)" stroke-width="10.5" stroke-linecap="round" />
+  <path d="M118 60L101 88H116L104 120L131 83H115L118 60Z" fill="url(#boltGradH)" />
+  <circle cx="108" cy="44" r="7.5" fill="#34d399" />
+  <circle cx="108" cy="44" r="3.5" fill="#ffffff" />
+  <circle cx="88" cy="80" r="6.5" fill="#38bdf8" />
+  <circle cx="88" cy="80" r="3" fill="#ffffff" />
+  <circle cx="45" cy="122" r="7" fill="#38bdf8" />
+  <circle cx="45" cy="122" r="3" fill="#ffffff" />
+  <circle cx="92" cy="98" r="4.5" fill="#34d399" />
+  <circle cx="92" cy="98" r="2" fill="#ffffff" />
+
+  <!-- Brand Text -->
+  <text x="174" y="88" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="900" font-size="64" fill="#0f172a" letter-spacing="-1.5">Fiber<tspan fill="#2563eb">OS</tspan></text>
+  <rect x="430" y="46" width="76" height="32" rx="8" fill="#dbeafe" />
+  <text x="468" y="68" text-anchor="middle" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="800" font-size="18" fill="#1d4ed8">FTTH</text>
+  <text x="176" y="122" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" font-size="22" fill="#64748b" letter-spacing="0.5">GCI-MTI BLORA ROLLOUT MONITORING</text>
+</svg>
