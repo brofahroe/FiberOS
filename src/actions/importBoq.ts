@@ -448,7 +448,7 @@ export async function commitBoqImport(data: {
       });
     }
 
-    // Aggregate items that map to the same BOQ target name (e.g. JC 48c + JC 144c -> Joint Closure (JC), or Pole 7m "4" + 9m "4")
+    // Aggregate items that map to the same BOQ target name (e.g. JC 48c + JC 144c -> Joint Closure (JC))
     const aggregatedMap = new Map<
       string,
       { boqName: string; category: string; unit: string; quantity: number }

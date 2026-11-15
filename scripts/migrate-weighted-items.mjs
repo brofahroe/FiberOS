@@ -143,34 +143,57 @@ async function main() {
       });
     }
 
-    // 2. Ensure new BOQ item "Seling" (from BOQ-list.xlsx) exists on cluster
-    const hasSeling = cluster.workItems.some(
-      (wi) => wi.scope === 'CLUSTER' && wi.itemName.trim().toLowerCase() === 'seling'
-    );
-    if (!hasSeling) {
-      await prisma.workItem.upsert({
-        where: {
-          clusterId_scope_itemName: {
+    // 2. Ensure new/revised BOQ items from BOQ-list.xlsx exist on cluster
+    const ensuredClusterItems = [
+      {
+        workType: 'CW',
+        category: 'POLE',
+        subCategory: 'POLE',
+        weight: 40,
+        itemName: 'Pole 9m "4"',
+        unit: 'Btg',
+        sortOrder: 4,
+      },
+      {
+        workType: 'CW',
+        category: 'SELING',
+        subCategory: 'ACC',
+        weight: 10,
+        itemName: 'Seling',
+        unit: 'Meter',
+        sortOrder: 13,
+      },
+    ];
+
+    for (const reqItem of ensuredClusterItems) {
+      const exists = cluster.workItems.some(
+        (wi) => wi.scope === 'CLUSTER' && wi.itemName.trim().toLowerCase() === reqItem.itemName.toLowerCase()
+      );
+      if (!exists) {
+        await prisma.workItem.upsert({
+          where: {
+            clusterId_scope_itemName: {
+              clusterId: cluster.id,
+              scope: 'CLUSTER',
+              itemName: reqItem.itemName,
+            },
+          },
+          update: {},
+          create: {
             clusterId: cluster.id,
             scope: 'CLUSTER',
-            itemName: 'Seling',
+            workType: reqItem.workType,
+            category: reqItem.category,
+            subCategory: reqItem.subCategory,
+            weight: reqItem.weight,
+            itemName: reqItem.itemName,
+            unit: reqItem.unit,
+            boq: 0,
+            status: 'ONGOING',
+            sortOrder: reqItem.sortOrder,
           },
-        },
-        update: {},
-        create: {
-          clusterId: cluster.id,
-          scope: 'CLUSTER',
-          workType: 'CW',
-          category: 'SELING',
-          subCategory: 'ACC',
-          weight: 10,
-          itemName: 'Seling',
-          unit: 'Meter',
-          boq: 0,
-          status: 'ONGOING',
-          sortOrder: 12,
-        },
-      });
+        });
+      }
     }
   }
 
