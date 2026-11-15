@@ -1,13 +1,7 @@
 import { prisma } from '@/lib/prisma';
-import { ensureNextcloudDir, getFileFromNextcloud } from '@/lib/nextcloud';
+import { getFileFromNextcloud } from '@/lib/nextcloud';
 
-const NEXTCLOUD_URL = (process.env.NEXTCLOUD_URL || 'https://drive.gciconnect.my.id').replace(/\/$/, '');
-const NEXTCLOUD_USER = process.env.NEXTCLOUD_USER || 'gcibot';
-const NEXTCLOUD_PASSWORD = process.env.NEXTCLOUD_PASSWORD || 'Gcidesign#1';
 const NEXTCLOUD_DIR = (process.env.NEXTCLOUD_DIR || 'foto-imple').replace(/^\/|\/$/g, '');
-
-const authHeader = `Basic ${Buffer.from(`${NEXTCLOUD_USER}:${NEXTCLOUD_PASSWORD}`).toString('base64')}`;
-const davBaseUrl = `${NEXTCLOUD_URL}/remote.php/dav/files/${encodeURIComponent(NEXTCLOUD_USER)}`;
 
 const BACKUP_SUBFOLDER = '_system_db';
 const BACKUP_FILENAME = 'fiberos-state.json';
@@ -132,7 +126,7 @@ export async function normalizeDatabaseReportDates(): Promise<void> {
     }
 
     if (changedCount > 0) {
-      await backupDatabaseToNextcloud();
+      console.info(`[dbSync] Normalized ${changedCount} report dates in PostgreSQL.`);
     }
   } catch (err) {
     console.warn('Error normalizing database report dates:', err);
@@ -143,75 +137,31 @@ let hasRestoredInThisProcess = false;
 let isRestoring = false;
 
 /**
- * Exports the entire Prisma database (Projects, Clusters, WorkItems, DailyReports, DailyProgressItems)
- * to Nextcloud WebDAV so container rebuilds/redeployments never lose data.
+ * Legacy no-op kept for caller compatibility.
+ * PostgreSQL (Neon) is now the single source of truth; Nextcloud is used only for field photo storage.
  */
 export async function backupDatabaseToNextcloud(): Promise<boolean> {
-  try {
-    const projects = await prisma.project.findMany({
-      include: {
-        clusters: {
-          include: {
-            workItems: true,
-            dailyReports: {
-              include: {
-                items: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (projects.length === 0) return false;
-
-    const payload = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      projects,
-    };
-
-    const targetDir = `${NEXTCLOUD_DIR}/${BACKUP_SUBFOLDER}`;
-    await ensureNextcloudDir(targetDir);
-
-    const targetUrl = `${davBaseUrl}/${encodeURI(BACKUP_REMOTE_PATH)}`;
-    const bodyBuffer = Buffer.from(JSON.stringify(payload), 'utf-8');
-
-    const res = await fetch(targetUrl, {
-      method: 'PUT',
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/json',
-      },
-      body: new Uint8Array(bodyBuffer),
-      cache: 'no-store',
-    });
-
-    if (res.status === 200 || res.status === 201 || res.status === 204) {
-      return true;
-    }
-    console.warn('Nextcloud DB backup returned status:', res.status);
-    return false;
-  } catch (err) {
-    console.error('Error backing up database to Nextcloud:', err);
-    return false;
-  }
+  return true;
 }
 
 /**
- * Restores database state from Nextcloud WebDAV if a cloud backup exists.
- * Called once per server startup so ephemeral Docker container deployments keep 100% of user data.
+ * One-time bootstrap: restores database state from Nextcloud WebDAV ONLY if the PostgreSQL database is empty.
+ * Never overwrites an existing non-empty PostgreSQL database.
  */
 export async function ensureDatabaseRestoredFromNextcloud(): Promise<void> {
   if (hasRestoredInThisProcess || isRestoring) return;
   isRestoring = true;
 
   try {
+    const projectCount = await prisma.project.count();
+    if (projectCount > 0) {
+      hasRestoredInThisProcess = true;
+      return;
+    }
+
     const res = await getFileFromNextcloud(BACKUP_REMOTE_PATH);
     if (!res) {
-      // No backup on Nextcloud yet -> create initial backup from current DB state
       hasRestoredInThisProcess = true;
-      await backupDatabaseToNextcloud();
       return;
     }
 

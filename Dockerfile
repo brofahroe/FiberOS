@@ -11,8 +11,8 @@ RUN npm install
 # Copy application files
 COPY . .
 
-# Generate Prisma Client with explicit binary targets & Build Next.js
-RUN npx prisma generate
+# Generate Prisma Client & Build Next.js (build-time fallback URL if not injected via build args)
+RUN DATABASE_URL="postgresql://postgres:postgres@localhost:5432/fiberos" npx prisma generate
 RUN npm run build
 
 EXPOSE 3000

@@ -32,7 +32,13 @@ function formatCanonicalReportDate(dateStr) {
 }
 
 async function main() {
-  console.log('☁️ Checking Nextcloud for persistent database snapshot...');
+  const existingProjects = await prisma.project.count();
+  if (existingProjects > 0) {
+    console.log(`✅ PostgreSQL database already contains ${existingProjects} project(s). Skipping Nextcloud restore.`);
+    return;
+  }
+
+  console.log('☁️ PostgreSQL database is empty. Checking Nextcloud for initial migration snapshot...');
   try {
     const targetUrl = `${davBaseUrl}/${encodeURI(BACKUP_REMOTE_PATH)}`;
     const res = await fetch(targetUrl, {

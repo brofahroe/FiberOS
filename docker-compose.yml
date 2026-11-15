@@ -8,8 +8,12 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./prisma/fiberos.db:/app/prisma/fiberos.db
       - ./public/uploads:/app/public/uploads
     environment:
       - NODE_ENV=production
-
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTCLOUD_URL=${NEXTCLOUD_URL:-https://drive.gciconnect.my.id}
+      - NEXTCLOUD_USER=${NEXTCLOUD_USER:-gcibot}
+      - NEXTCLOUD_PASSWORD=${NEXTCLOUD_PASSWORD:-Gcidesign#1}
+      - NEXTCLOUD_DIR=${NEXTCLOUD_DIR:-foto-imple}
+      - NEXTCLOUD_SHARE_TOKEN=${NEXTCLOUD_SHARE_TOKEN:-G6okGDyWRpAoYq3}

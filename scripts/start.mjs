@@ -1,30 +1,18 @@
 import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
 
-console.log('--- Initializing FiberOS Production Startup ---');
+console.log('--- Initializing FiberOS Production Startup (PostgreSQL) ---');
 
 try {
-  // If a volume is mounted at /data or /app/data, ensure the directory exists
-  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('file:')) {
-    const dbPath = process.env.DATABASE_URL.replace('file:', '');
-    const dir = path.dirname(path.resolve(dbPath));
-    if (!fs.existsSync(dir)) {
-      console.log(`Creating database directory: ${dir}`);
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  }
-
-  console.log('Ensuring database schema is synchronized...');
+  console.log('Ensuring PostgreSQL database schema is synchronized...');
   execSync('npx prisma db push --skip-generate', { stdio: 'inherit' });
 
-  console.log('Checking database seed...');
-  execSync('node scripts/seed-if-empty.mjs', { stdio: 'inherit' });
-
-  console.log('Restoring persistent cloud database snapshot from Nextcloud...');
+  console.log('Checking initial Nextcloud snapshot migration (only if DB is empty)...');
   execSync('node scripts/restore-from-nextcloud.mjs', { stdio: 'inherit' });
 
-  console.log('Running weighted items migration...');
+  console.log('Checking database seed (only if DB is still empty)...');
+  execSync('node scripts/seed-if-empty.mjs', { stdio: 'inherit' });
+
+  console.log('Running weighted items & sitelist metadata check...');
   execSync('node scripts/migrate-weighted-items.mjs', { stdio: 'inherit' });
 } catch (err) {
   console.error('Database initialization warning:', err.message);
@@ -32,4 +20,3 @@ try {
 
 console.log('Starting Next.js Server...');
 execSync('next start', { stdio: 'inherit' });
-

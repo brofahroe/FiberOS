@@ -23,6 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
 
 # vercel
@@ -32,7 +33,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# SQLite uploads
+# SQLite local files & uploads
+*.db
+*.db-journal
 public/uploads/*
 !public/uploads/.gitkeep
 
