@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getWhatsAppReportData, WaReportData } from '@/actions/whatsappReport';
+import { useState, useEffect, useRef } from 'react';
+import { getMultiClusterWhatsAppReportData, WaReportData } from '@/actions/whatsappReport';
 import { 
   MessageSquare, 
   Copy, 
@@ -15,6 +15,9 @@ import {
   Building2,
   Calendar,
   RotateCcw,
+  Search,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 interface WhatsAppReportModalProps {
@@ -31,13 +34,20 @@ export default function WhatsAppReportModal({
   clusterId,
   reportDate,
 }: WhatsAppReportModalProps) {
-  const [selectedClusterId, setSelectedClusterId] = useState<string>(clusterId);
+  const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>(() =>
+    clusterId ? [clusterId] : []
+  );
   const [selectedReportDate, setSelectedReportDate] = useState<string>(reportDate);
   const [clustersList, setClustersList] = useState<Array<{ id: string; name: string; code?: string | null }>>([]);
   const [datesList, setDatesList] = useState<string[]>([]);
+  const [clustersWithReports, setClustersWithReports] = useState<string[]>([]);
+
+  const [clusterDropdownOpen, setClusterDropdownOpen] = useState<boolean>(false);
+  const [clusterSearch, setClusterSearch] = useState<string>('');
+  const clusterDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
-  const [data, setData] = useState<WaReportData | null>(null);
+  const [reportsData, setReportsData] = useState<WaReportData[]>([]);
   const [copied, setCopied] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [customMessage, setCustomMessage] = useState<string | null>(null);
@@ -55,11 +65,35 @@ export default function WhatsAppReportModal({
   const [planAtpCw, setPlanAtpCw] = useState<string>('DD/MM/YY');
   const [planAtpOpm, setPlanAtpOpm] = useState<string>('0/0/2026');
 
-  // Sync initial props
+  // Sync initial props whenever modal is closed or props change
   useEffect(() => {
-    if (clusterId) setSelectedClusterId(clusterId);
-    if (reportDate) setSelectedReportDate(reportDate);
-  }, [clusterId, reportDate]);
+    if (!isOpen) {
+      setClusterDropdownOpen(false);
+      setClusterSearch('');
+      setSelectedClusterIds(clusterId ? [clusterId] : []);
+      if (reportDate) setSelectedReportDate(reportDate);
+    } else {
+      if (clusterId) {
+        setSelectedClusterIds((prev) => (prev.length === 0 ? [clusterId] : prev));
+      }
+      if (reportDate) {
+        setSelectedReportDate((prev) => prev || reportDate);
+      }
+    }
+  }, [isOpen, clusterId, reportDate]);
+
+  // Close multi-select dropdown when clicking outside
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (clusterDropdownRef.current && !clusterDropdownRef.current.contains(e.target as Node)) {
+        setClusterDropdownOpen(false);
+      }
+    };
+    if (clusterDropdownOpen) {
+      document.addEventListener('mousedown', handleOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [clusterDropdownOpen]);
 
   // Load saved preferences
   useEffect(() => {
@@ -100,41 +134,64 @@ export default function WhatsAppReportModal({
     }
   };
 
-  const loadReportData = async (cId: string, rDate: string) => {
+  const loadReportData = async (cIds: string[], rDate: string) => {
     setLoading(true);
     setCopied(false);
 
-    const res = await getWhatsAppReportData(cId, rDate);
+    const res = await getMultiClusterWhatsAppReportData(cIds, rDate);
     setLoading(false);
 
-    if (res.success && res.data) {
-      setData(res.data);
-      if (res.data.availableClusters && res.data.availableClusters.length > 0) {
-        setClustersList(res.data.availableClusters);
+    if (res.success && res.reports) {
+      setReportsData(res.reports);
+      if (res.availableClusters && res.availableClusters.length > 0) {
+        setClustersList(res.availableClusters);
+        if (cIds.length === 0 && res.reports.length > 0) {
+          setSelectedClusterIds([res.reports[0].clusterId]);
+        }
       }
-      if (res.data.availableDates && res.data.availableDates.length > 0) {
-        setDatesList(res.data.availableDates);
+      if (res.availableDates && res.availableDates.length > 0) {
+        setDatesList(res.availableDates);
+      }
+      if (res.clustersWithReportsOnDate) {
+        setClustersWithReports(res.clustersWithReportsOnDate);
       }
 
-      // Automatically update siteName, siteId, and OLT for the selected cluster
-      const autoSiteName =
-        res.data.officialSiteName || `KELURAHAN ${res.data.clusterName.toUpperCase()} BLORA`;
-      setSiteName(autoSiteName);
-      if (res.data.siteId) setSiteId(res.data.siteId);
-      if (res.data.oltName) setOlt(res.data.oltName);
-      if (res.data.reporterName) setSubconLeader(res.data.reporterName);
-      if (res.data.teamName) setSubconName(res.data.teamName);
+      // Automatically update siteName, siteId, and OLT when 1 cluster is selected
+      if (res.reports.length === 1) {
+        const primary = res.reports[0];
+        const autoSiteName =
+          primary.officialSiteName || `KELURAHAN ${primary.clusterName.toUpperCase()} BLORA`;
+        setSiteName(autoSiteName);
+        if (primary.siteId) setSiteId(primary.siteId);
+        if (primary.oltName) setOlt(primary.oltName);
+        if (primary.reporterName) setSubconLeader(primary.reporterName);
+        if (primary.teamName) setSubconName(primary.teamName);
+      }
       setCustomMessage(null); // Reset manual edit to show fresh report
     }
   };
 
   useEffect(() => {
     if (!isOpen) return;
-    loadReportData(selectedClusterId, selectedReportDate);
-  }, [isOpen, selectedClusterId, selectedReportDate]);
+    const idsToLoad = selectedClusterIds.length > 0 ? selectedClusterIds : (clusterId ? [clusterId] : []);
+    loadReportData(idsToLoad, selectedReportDate);
+  }, [isOpen, selectedClusterIds, selectedReportDate, clusterId]);
 
-  const handleClusterSelect = (newClusterId: string) => {
-    setSelectedClusterId(newClusterId);
+  const toggleClusterSelection = (cId: string) => {
+    setSelectedClusterIds((prev) => {
+      if (prev.includes(cId)) {
+        // Keep at least 1 cluster selected
+        if (prev.length <= 1) return prev;
+        return prev.filter((id) => id !== cId);
+      }
+      return [...prev, cId];
+    });
+  };
+
+  const handleSelectClustersWithReports = () => {
+    if (clustersWithReports.length > 0) {
+      setSelectedClusterIds(clustersWithReports);
+    }
   };
 
   const handleDateSelect = (newDate: string) => {
@@ -145,13 +202,11 @@ export default function WhatsAppReportModal({
 
   const formatNumber = (num: number) => num.toLocaleString('id-ID');
 
-  const buildWaText = () => {
-    if (!data) return '';
-
+  const formatSingleClusterReport = (itemData: WaReportData, isSingleSelection: boolean) => {
     const formatMetric = (item: { boq: number; actual: number; today: number; isDone: boolean }) => {
       const boqStr = formatNumber(item.boq);
       const actStr = formatNumber(item.actual);
-      
+
       let todayStr = '';
       if (item.isDone) {
         // Tanda centang ijo (✅) HANYA muncul jika kondisi sudah final = DONE
@@ -172,8 +227,8 @@ export default function WhatsAppReportModal({
       return `${boqStr}/${actStr}/${todayStr}`;
     };
 
-    const d = data.distribusi;
-    const s = data.subfeeder;
+    const d = itemData.distribusi;
+    const s = itemData.subfeeder;
 
     const clrPoleLine = formatMetric(d.pole);
     const clrCableLine = formatMetric(d.cable);
@@ -185,16 +240,28 @@ export default function WhatsAppReportModal({
     const sfCableLine = formatMetric(s.cable);
     const sfJcLine = formatMetric(s.jc);
 
+    const effectiveSiteName = isSingleSelection
+      ? siteName || itemData.officialSiteName
+      : itemData.officialSiteName || `KELURAHAN ${itemData.clusterName.toUpperCase()} BLORA`;
+    const effectiveSiteId = isSingleSelection ? siteId || itemData.siteId : itemData.siteId;
+    const effectiveOlt = isSingleSelection ? olt || itemData.oltName : itemData.oltName || olt;
+    const effectiveSubcon = isSingleSelection
+      ? subconName
+      : itemData.teamName || subconName;
+    const effectiveLeader = isSingleSelection
+      ? subconLeader
+      : itemData.reporterName || subconLeader;
+
     return `*ZTE BLORA FTTH Project MoraRepublic*
-*${data.formattedDate}*
-Site Name: *${siteName}*
-Site ID:  *${siteId}*
+*${itemData.formattedDate}*
+Site Name: *${effectiveSiteName}*
+Site ID:  *${effectiveSiteId}*
 City: ${city}
-OLT: ${olt}
+OLT: ${effectiveOlt}
 ZTE PIC :  ${ztePic}
-Subcon name : ${subconName}
+Subcon name : ${effectiveSubcon}
 Subcon teams Qty : ${teamQty}
-Subcon leader : ${subconLeader}
+Subcon leader : ${effectiveLeader}
 Tanggal Start IM: ${startImDate}
  
 Format : ( SOW BOQ / TOTAL ACTUAL / PENCAPAIAN HARI INI ) : X/Y/Z
@@ -227,6 +294,14 @@ Install Slingware :  ${d.wireSling.today > 0 ? `${formatNumber(d.wireSling.today
 Install FDT : ${d.fdt.today > 0 ? formatNumber(d.fdt.today) : ''}
 Install FAT : ${d.fat.today > 0 ? formatNumber(d.fat.today) : '0'}
 Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
+  };
+
+  const buildWaText = () => {
+    if (reportsData.length === 0) return '';
+    const isSingle = reportsData.length === 1;
+    return reportsData
+      .map((item) => formatSingleClusterReport(item, isSingle))
+      .join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
   };
 
   const generatedWaText = buildWaText();
@@ -278,43 +353,177 @@ Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
 
         {/* Content Body */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
-          {/* Cluster & Tanggal Dropdown Selectors */}
-          <div className="p-4 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3.5 shadow-xs">
-            <div>
-              <label className="text-xs font-bold text-emerald-950 block mb-1.5 flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-emerald-700" />
-                <span>Pilih Cluster (Drop-down):</span>
-              </label>
-              <select
-                value={selectedClusterId}
-                onChange={(e) => handleClusterSelect(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
-              >
-                {clustersList.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+          {/* Cluster (Multi-Select) & Tanggal Dropdown Selectors */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl space-y-3 shadow-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Multi-Select Cluster Dropdown */}
+              <div ref={clusterDropdownRef} className="relative">
+                <label className="text-xs font-bold text-emerald-950 block mb-1.5 flex items-center justify-between gap-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-emerald-700" />
+                    <span>Pilih Cluster (Bisa &gt; 1):</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                    {selectedClusterIds.length} dipilih
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setClusterDropdownOpen((prev) => !prev)}
+                  className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer flex items-center justify-between gap-2"
+                >
+                  <span className="truncate">
+                    {(() => {
+                      const names = clustersList
+                        .filter((c) => selectedClusterIds.includes(c.id))
+                        .map((c) => c.name);
+                      if (names.length === 0) return 'Pilih Cluster...';
+                      if (names.length === 1) return names[0];
+                      if (names.length === 2) return `${names[0]}, ${names[1]}`;
+                      return `${names[0]}, ${names[1]} (+${names.length - 2} lainnya)`;
+                    })()}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-emerald-700 shrink-0 transition-transform ${clusterDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {clusterDropdownOpen && (
+                  <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white rounded-2xl border border-emerald-200 shadow-2xl overflow-hidden animate-in fade-in duration-150">
+                    {/* Search + Quick Actions */}
+                    <div className="p-2.5 border-b border-slate-100 bg-slate-50 space-y-2">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={clusterSearch}
+                          onChange={(e) => setClusterSearch(e.target.value)}
+                          placeholder="Cari nama cluster..."
+                          className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2 pointer-events-none" />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {clustersWithReports.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleSelectClustersWithReports}
+                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition"
+                          >
+                            Ada Input Hari Ini ({clustersWithReports.length})
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedClusterIds(clustersList.map((c) => c.id))}
+                          className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-[10px] font-bold transition"
+                        >
+                          Semua ({clustersList.length})
+                        </button>
+                        {selectedClusterIds.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedClusterIds([selectedClusterIds[0]])}
+                            className="px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg text-[10px] font-semibold transition"
+                          >
+                            Reset (1)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Checkbox List */}
+                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-100">
+                      {clustersList
+                        .filter((c) =>
+                          c.name.toLowerCase().includes(clusterSearch.trim().toLowerCase())
+                        )
+                        .map((c) => {
+                          const isChecked = selectedClusterIds.includes(c.id);
+                          const hasReport = clustersWithReports.includes(c.id);
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => toggleClusterSelection(c.id)}
+                              className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between gap-2 transition ${
+                                isChecked
+                                  ? 'bg-emerald-50/80 text-emerald-950 font-bold'
+                                  : 'hover:bg-slate-50 text-slate-700 font-medium'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isChecked ? (
+                                  <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-slate-300 shrink-0" />
+                                )}
+                                <span className="truncate">{c.name}</span>
+                              </div>
+                              {hasReport && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">
+                                  Ada input
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-emerald-950 block mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-emerald-700" />
+                  <span>Tanggal Input Harian:</span>
+                </label>
+                <select
+                  value={selectedReportDate}
+                  onChange={(e) => handleDateSelect(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
+                >
+                  {datesList.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-emerald-950 block mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-emerald-700" />
-                <span>Tanggal Input Harian:</span>
-              </label>
-              <select
-                value={selectedReportDate}
-                onChange={(e) => handleDateSelect(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs cursor-pointer"
-              >
-                {datesList.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Selected Cluster Chips */}
+            {selectedClusterIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {clustersList
+                  .filter((c) => selectedClusterIds.includes(c.id))
+                  .map((c) => (
+                    <span
+                      key={c.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-emerald-300 text-[11px] font-bold text-emerald-900"
+                    >
+                      <span>{c.name}</span>
+                      {selectedClusterIds.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleClusterSelection(c.id)}
+                          className="text-emerald-600 hover:text-rose-600"
+                          title={`Hapus ${c.name}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                {clustersWithReports.length > 1 &&
+                  clustersWithReports.some((id) => !selectedClusterIds.includes(id)) && (
+                    <button
+                      type="button"
+                      onClick={handleSelectClustersWithReports}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline ml-1"
+                    >
+                      + Pilih Semua yang Ada Input ({clustersWithReports.length} Cluster)
+                    </button>
+                  )}
+              </div>
+            )}
           </div>
 
           {loading ? (
@@ -477,7 +686,7 @@ Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={loading || !data}
+              disabled={loading || reportsData.length === 0}
               onClick={handleCopy}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold shadow-md transition disabled:opacity-50"
             >
@@ -487,7 +696,7 @@ Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
 
             <button
               type="button"
-              disabled={loading || !data}
+              disabled={loading || reportsData.length === 0}
               onClick={handleOpenWhatsApp}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50"
             >

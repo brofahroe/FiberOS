@@ -23,6 +23,7 @@ export interface WaReportData {
   teamName: string;
   availableClusters: Array<{ id: string; name: string; code?: string | null }>;
   availableDates: string[];
+  clustersWithReportsOnDate: string[];
   distribusi: {
     pole: WaReportItemMetrics;
     cable: WaReportItemMetrics;
@@ -35,6 +36,16 @@ export interface WaReportData {
     cable: WaReportItemMetrics;
     jc: WaReportItemMetrics;
   };
+}
+
+export interface WaMultiClusterResponse {
+  success: boolean;
+  reports?: WaReportData[];
+  availableClusters?: Array<{ id: string; name: string; code?: string | null }>;
+  availableDates?: string[];
+  clustersWithReportsOnDate?: string[];
+  reportDate?: string;
+  error?: string;
 }
 
 function parseReportDateMs(d: string): number {
@@ -85,6 +96,84 @@ function formatIndoDate(d: string): string {
   return d;
 }
 
+export async function getMultiClusterWhatsAppReportData(
+  clusterIds: string[],
+  reportDate?: string
+): Promise<WaMultiClusterResponse> {
+  try {
+    const allClusters = await prisma.cluster.findMany({
+      select: { id: true, name: true, code: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (allClusters.length === 0) {
+      return { success: false, error: 'Belum ada cluster di sistem.' };
+    }
+
+    const validClusterIds = clusterIds.filter((id) => allClusters.some((c) => c.id === id));
+    const targetIds = validClusterIds.length > 0 ? validClusterIds : [allClusters[0].id];
+
+    const allReports = await prisma.dailyReport.findMany({
+      select: { clusterId: true, reportDate: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const allUniqueDates = Array.from(new Set(allReports.map((r) => r.reportDate))).sort(
+      (a, b) => parseReportDateMs(b) - parseReportDateMs(a)
+    );
+
+    const targetReportsDates = Array.from(
+      new Set(allReports.filter((r) => targetIds.includes(r.clusterId)).map((r) => r.reportDate))
+    ).sort((a, b) => parseReportDateMs(b) - parseReportDateMs(a));
+
+    const availableDates = Array.from(new Set([...targetReportsDates, ...allUniqueDates])).sort(
+      (a, b) => parseReportDateMs(b) - parseReportDateMs(a)
+    );
+
+    let targetReportDate = reportDate;
+    if (!targetReportDate || targetReportDate.trim() === '') {
+      targetReportDate = targetReportsDates[0] || availableDates[0] || '15-Nov-26';
+    }
+
+    const normalizedTargetDate = normalizeDateStr(targetReportDate);
+    const clustersWithReportsOnDate = Array.from(
+      new Set(
+        allReports
+          .filter(
+            (r) =>
+              r.reportDate === targetReportDate ||
+              normalizeDateStr(r.reportDate) === normalizedTargetDate
+          )
+          .map((r) => r.clusterId)
+      )
+    );
+
+    const reports: WaReportData[] = [];
+    for (const cId of targetIds) {
+      const res = await getWhatsAppReportData(cId, targetReportDate);
+      if (res.success && res.data) {
+        reports.push({
+          ...res.data,
+          clustersWithReportsOnDate,
+          availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
+        });
+      }
+    }
+
+    return {
+      success: true,
+      reports,
+      availableClusters: allClusters,
+      availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
+      clustersWithReportsOnDate,
+      reportDate: targetReportDate,
+    };
+  } catch (error: any) {
+    console.error('Error fetching multi-cluster WA report data:', error);
+    return { success: false, error: error.message || 'Gagal memuat data laporan WA multi-cluster.' };
+  }
+}
+
 export async function getWhatsAppReportData(
   clusterId?: string,
   reportDate?: string
@@ -113,7 +202,7 @@ export async function getWhatsAppReportData(
     });
 
     const allReports = await prisma.dailyReport.findMany({
-      select: { reportDate: true },
+      select: { clusterId: true, reportDate: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -131,6 +220,18 @@ export async function getWhatsAppReportData(
     if (!targetReportDate || targetReportDate.trim() === '') {
       targetReportDate = clusterDates[0] || availableDates[0] || '12-Nov-26';
     }
+
+    const clustersWithReportsOnDate = Array.from(
+      new Set(
+        allReports
+          .filter(
+            (r) =>
+              r.reportDate === targetReportDate ||
+              normalizeDateStr(r.reportDate) === normalizeDateStr(targetReportDate)
+          )
+          .map((r) => r.clusterId)
+      )
+    );
 
     const reportsOnTargetDate = clusterReports.filter(
       (r) =>
@@ -261,6 +362,7 @@ export async function getWhatsAppReportData(
         teamName: teamNames.join(', '),
         availableClusters: allClusters,
         availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
+        clustersWithReportsOnDate,
         distribusi: {
           pole: clrPole,
           cable: clrCable,
