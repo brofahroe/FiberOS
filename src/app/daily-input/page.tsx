@@ -23,7 +23,7 @@ export default async function DailyInputPage({
     console.error('Error fetching clusters for daily input:', err);
   }
 
-  const masterTeams = getMasterTeams();
+  const masterTeams = await getMasterTeams();
 
   return (
     <div className="py-2">

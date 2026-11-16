@@ -92,3 +92,12 @@ model DailyProgressItem {
   @@unique([dailyReportId, workItemId])
 }
 
+model MasterTeam {
+  id           String   @id @default(cuid())
+  timPelaksana String
+  subcon       String
+  tim          String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+

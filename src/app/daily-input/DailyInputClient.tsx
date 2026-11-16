@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getClusterItemsForForm, submitDailyProgress, getDailyReportTeams, getExistingDailyReport, deleteDailyReportByDate, renameDailyReportTeam } from '@/actions/dailyProgress';
+import { getClusterItemsForForm, submitDailyProgress, getDailyReportTeams, getExistingDailyReport, deleteDailyReportByDate, renameDailyReportTeam, addMasterTeam } from '@/actions/dailyProgress';
 import { compressImage } from '@/lib/imageCompression';
 import { 
   Building2, 
@@ -142,11 +142,28 @@ export default function DailyInputClient({
   const datePickerRef = useRef<HTMLDivElement | null>(null);
   const [reporterName, setReporterName] = useState<string>('');
   const [teamName, setTeamName] = useState<string>(initialTeam || '');
+  const [masterTeamList, setMasterTeamList] = useState<TimPelaksanaOption[]>(masterTeams);
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
   const [previousTeams, setPreviousTeams] = useState<PreviousTeamOption[]>([]);
   const [loadingTeams, setLoadingTeams] = useState<boolean>(false);
   const [teamListError, setTeamListError] = useState<string | null>(null);
   const pendingAutoTeamRef = useRef<boolean>(!initialTeam);
+
+  useEffect(() => {
+    setMasterTeamList(masterTeams);
+  }, [masterTeams]);
+
+  const handleAddMasterTeam = async (input: { timPelaksana: string; subcon: string }) => {
+    const res = await addMasterTeam(input);
+    if (res.success && res.team) {
+      const added = res.team;
+      setMasterTeamList((prev) => {
+        const exists = prev.some((t) => t.tim.toLowerCase() === added.tim.toLowerCase());
+        return exists ? prev : [...prev, added];
+      });
+    }
+    return res;
+  };
   const [weather, setWeather] = useState<string>('Cerah');
   const [notes, setNotes] = useState<string>('');
 
@@ -950,7 +967,8 @@ export default function DailyInputClient({
               onChange={setTeamName}
               teamsOnDate={availableTeams}
               previousTeams={previousTeams}
-              masterTeams={masterTeams}
+              masterTeams={masterTeamList}
+              onAddTeam={handleAddMasterTeam}
               loadingTeams={loadingTeams}
               error={teamListError}
             />
@@ -1045,7 +1063,7 @@ export default function DailyInputClient({
                   className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <datalist id="tim-pelaksana-rename-list">
-                  {masterTeams.map((mt) => (
+                  {masterTeamList.map((mt) => (
                     <option key={mt.tim} value={mt.tim} />
                   ))}
                 </datalist>

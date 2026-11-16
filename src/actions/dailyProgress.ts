@@ -6,6 +6,12 @@ import { uploadFileToNextcloud } from '@/lib/nextcloud';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 import sitelistData from '@/data/sitelist.json';
 import { DEFAULT_BOQ_WORK_ITEMS } from '@/lib/progressCalculator';
+import {
+  appendTeamToExcelFile,
+  formatTimPelaksanaName,
+  getMasterTeams,
+  type TimPelaksanaOption,
+} from '@/lib/timPelaksana';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -844,6 +850,69 @@ export async function getDailyReportsHistory(limit: number = 50) {
   } catch (error: any) {
     console.error('Error fetching reports history:', error);
     return { success: false, reports: [] };
+  }
+}
+
+export async function addMasterTeam(data: {
+  timPelaksana: string;
+  subcon: string;
+}): Promise<{
+  success: boolean;
+  alreadyExists?: boolean;
+  team?: TimPelaksanaOption;
+  error?: string;
+}> {
+  const leader = (data.timPelaksana || '').trim().replace(/\s+/g, ' ');
+  const vendor = (data.subcon || '').trim().replace(/\s+/g, ' ');
+
+  if (!leader) {
+    return { success: false, error: 'Nama Tim Pelaksana wajib diisi.' };
+  }
+  if (!vendor) {
+    return { success: false, error: 'Nama Subcon wajib diisi.' };
+  }
+
+  const formattedTim = formatTimPelaksanaName(leader, vendor);
+
+  try {
+    const existingList = await getMasterTeams();
+    const matched = existingList.find(
+      (item) => item.tim.trim().toLowerCase() === formattedTim.toLowerCase()
+    );
+    if (matched) {
+      return {
+        success: true,
+        alreadyExists: true,
+        team: matched,
+      };
+    }
+
+    const created = await prisma.masterTeam.create({
+      data: {
+        timPelaksana: leader,
+        subcon: vendor,
+        tim: formattedTim,
+      },
+    });
+
+    const entry: TimPelaksanaOption = {
+      timPelaksana: created.timPelaksana,
+      subcon: created.subcon,
+      tim: created.tim,
+    };
+
+    appendTeamToExcelFile(entry);
+    revalidatePath('/daily-input');
+
+    return {
+      success: true,
+      alreadyExists: false,
+      team: entry,
+    };
+  } catch (error: unknown) {
+    console.error('Error adding master team:', error);
+    const errMsg = error instanceof Error ? error.message : 'Gagal menambahkan tim baru.';
+    return { success: false, error: errMsg };
   }
 }
 
