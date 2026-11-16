@@ -101,3 +101,15 @@ model MasterTeam {
   updatedAt    DateTime @updatedAt
 }
 
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique
+  fullName           String
+  jobTitle           String   @default("Pengawas Lapangan")
+  role               String   @default("USER") // ADMIN | USER
+  passwordHash       String
+  mustChangePassword Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+

@@ -34,7 +34,7 @@ export default async function DailyInputPage({
       <DailyInputClient
         clusters={clusters}
         masterTeams={masterTeams}
-        loggedInUserName={currentUser?.username || ''}
+        loggedInUserName={currentUser ? currentUser.fullName || currentUser.username : ''}
         initialClusterId={searchParams.clusterId}
         initialDate={searchParams.date}
         initialTeam={searchParams.team}

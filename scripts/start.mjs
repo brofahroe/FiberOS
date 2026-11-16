@@ -14,6 +14,9 @@ try {
 
   console.log('Running weighted items & sitelist metadata check...');
   execSync('node scripts/migrate-weighted-items.mjs', { stdio: 'inherit' });
+
+  console.log('Ensuring default FiberOS user accounts...');
+  execSync('node scripts/seed-users.mjs', { stdio: 'inherit' });
 } catch (err) {
   console.error('Database initialization warning:', err.message);
 }

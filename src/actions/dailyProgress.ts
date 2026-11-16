@@ -234,7 +234,7 @@ export async function submitDailyProgress(data: {
   if (!currentUser) {
     return { success: false, error: 'Sesi login tidak valid. Silakan login kembali.' };
   }
-  const verifiedReporterName = currentUser.username;
+  const verifiedReporterName = currentUser.fullName || currentUser.username;
 
   try {
     await ensureDatabaseRestoredFromNextcloud();

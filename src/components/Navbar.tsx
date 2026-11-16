@@ -11,6 +11,7 @@ import {
   Layers,
   MapPin,
   UserCheck,
+  Users,
   LogOut,
   Loader2,
 } from 'lucide-react';
@@ -66,47 +67,69 @@ export default function Navbar({ currentUser }: { currentUser: SessionUser | nul
             </div>
           </Link>
 
-          {/* Desktop Nav + Theme Toggle */}
+          {/* Desktop Nav + User Actions */}
           <div className="flex items-center gap-2">
-            <nav className="hidden md:flex items-center gap-1">
-              {navLinks.map((link) => {
-                const Icon = link.icon;
-                const isActive = pathname === link.href;
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                      link.highlight
-                        ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/30'
-                        : isActive
-                        ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 font-semibold'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <Icon
-                      className={`w-4 h-4 ${
+            {!currentUser.mustChangePassword && (
+              <nav className="hidden md:flex items-center gap-1">
+                {navLinks.map((link) => {
+                  const Icon = link.icon;
+                  const isActive = pathname === link.href;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`flex items-center gap-1.5 px-2.5 lg:px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
                         link.highlight
-                          ? 'text-white'
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm shadow-blue-500/30'
                           : isActive
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-slate-500 dark:text-slate-400'
+                          ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 font-semibold'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
-                    />
-                    {link.label}
-                  </Link>
-                );
-              })}
-            </nav>
+                    >
+                      <Icon
+                        className={`w-4 h-4 ${
+                          link.highlight
+                            ? 'text-white'
+                            : isActive
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-slate-500 dark:text-slate-400'
+                        }`}
+                      />
+                      {link.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
 
             <div className="flex items-center gap-1.5 pl-1">
-              <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 text-xs font-bold"
-                title={`Login sebagai ${currentUser.username}`}
+              {currentUser.role === 'ADMIN' && !currentUser.mustChangePassword && (
+                <Link
+                  href="/admin/users"
+                  title="Kelola User (Admin)"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                    pathname === '/admin/users'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline">User</span>
+                </Link>
+              )}
+
+              <Link
+                href="/profile"
+                title={`Profil: ${currentUser.fullName} (${currentUser.jobTitle})`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all max-w-[140px] ${
+                  pathname === '/profile'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 hover:bg-blue-100'
+                }`}
               >
                 <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>{currentUser.username}</span>
-              </div>
+                <span className="truncate">{currentUser.fullName || currentUser.username}</span>
+              </Link>
 
               <ThemeToggle />
 
@@ -123,7 +146,7 @@ export default function Navbar({ currentUser }: { currentUser: SessionUser | nul
                 ) : (
                   <LogOut className="w-4 h-4" />
                 )}
-                <span className="hidden lg:inline">Keluar</span>
+                <span className="hidden xl:inline">Keluar</span>
               </button>
             </div>
           </div>
@@ -131,30 +154,32 @@ export default function Navbar({ currentUser }: { currentUser: SessionUser | nul
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 flex justify-around items-center shadow-lg">
-        {navLinks.map((link) => {
-          const Icon = link.icon;
-          const isActive = pathname === link.href;
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`flex flex-col items-center py-1 px-2 rounded-lg text-[11px] font-medium transition-all ${
-                link.highlight && isActive
-                  ? 'text-blue-600 dark:text-blue-400 font-bold'
-                  : isActive
-                  ? 'text-blue-600 dark:text-blue-400 font-semibold'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              <div className={`p-1 rounded-full ${link.highlight ? 'bg-blue-600 text-white shadow-sm' : ''}`}>
-                <Icon className={`w-5 h-5 ${link.highlight ? 'text-white' : ''}`} />
-              </div>
-              <span className="mt-0.5">{link.label}</span>
-            </Link>
-          );
-        })}
-      </div>
+      {!currentUser.mustChangePassword && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 flex justify-around items-center shadow-lg">
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`flex flex-col items-center py-1 px-2 rounded-lg text-[11px] font-medium transition-all ${
+                  link.highlight && isActive
+                    ? 'text-blue-600 dark:text-blue-400 font-bold'
+                    : isActive
+                    ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <div className={`p-1 rounded-full ${link.highlight ? 'bg-blue-600 text-white shadow-sm' : ''}`}>
+                  <Icon className={`w-5 h-5 ${link.highlight ? 'text-white' : ''}`} />
+                </div>
+                <span className="mt-0.5">{link.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
     </header>
   );
 }

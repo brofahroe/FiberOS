@@ -13,16 +13,13 @@ const PUBLIC_EXACT_PATHS = new Set([
   '/sw.js',
 ]);
 
-function isPublicPath(pathname: string): boolean {
+function isPublicAssetOrLogin(pathname: string): boolean {
   if (PUBLIC_EXACT_PATHS.has(pathname)) return true;
-  if (
+  return (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/icons/') ||
     pathname.startsWith('/workbox-')
-  ) {
-    return true;
-  }
-  return false;
+  );
 }
 
 export async function middleware(request: NextRequest) {
@@ -42,12 +39,14 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === '/login') {
     if (user) {
-      return NextResponse.redirect(new URL('/', request.url));
+      return NextResponse.redirect(
+        new URL(user.mustChangePassword ? '/profile?firstLogin=1' : '/', request.url)
+      );
     }
     return NextResponse.next();
   }
 
-  if (!user && !isPublicPath(pathname)) {
+  if (!user && !isPublicAssetOrLogin(pathname)) {
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -58,6 +57,18 @@ export async function middleware(request: NextRequest) {
       loginUrl.searchParams.set('redirect', fullTarget);
     }
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (user) {
+    // Wajib ganti password saat login pertama sebelum mengakses halaman selain /profile
+    if (user.mustChangePassword && pathname !== '/profile' && !pathname.startsWith('/api/')) {
+      return NextResponse.redirect(new URL('/profile?firstLogin=1', request.url));
+    }
+
+    // Proteksi route khusus Admin
+    if (pathname.startsWith('/admin') && user.role !== 'ADMIN') {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
   }
 
   return NextResponse.next();

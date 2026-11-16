@@ -1,49 +1,18 @@
 export const SESSION_COOKIE_NAME = 'fiberos_session';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 hari
 
-export interface SessionUser {
+export type UserRole = 'ADMIN' | 'USER';
+
+export interface SessionTokenUser {
+  id: string;
   username: string;
+  role: UserRole;
+  mustChangePassword: boolean;
 }
 
-const AUTHORIZED_USERS: ReadonlyArray<{ username: string; password: string }> = [
-  { username: 'Kamal', password: 'Password123' },
-  { username: 'Sigit', password: 'Password123' },
-  { username: 'Fahrudin', password: 'Password123' },
-  { username: 'Yanuar', password: 'Password123' },
-  { username: 'Danang', password: 'Password123' },
-];
-
-const ALLOWED_USERNAME_SET = new Set(AUTHORIZED_USERS.map((u) => u.username));
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const maxLen = Math.max(a.length, b.length);
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < maxLen; i++) {
-    const codeA = i < a.length ? a.charCodeAt(i) : 0;
-    const codeB = i < b.length ? b.charCodeAt(i) : 0;
-    diff |= codeA ^ codeB;
-  }
-  return diff === 0;
-}
-
-export function validateUserCredentials(username: string, password: string): SessionUser | null {
-  const normalizedInput = (username || '').trim().toLowerCase();
-  if (!normalizedInput || typeof password !== 'string' || password.length === 0) {
-    return null;
-  }
-
-  const matchedUser = AUTHORIZED_USERS.find(
-    (u) => u.username.toLowerCase() === normalizedInput
-  );
-  if (!matchedUser) {
-    return null;
-  }
-
-  if (!constantTimeEqual(password, matchedUser.password)) {
-    return null;
-  }
-
-  return { username: matchedUser.username };
+export interface SessionUser extends SessionTokenUser {
+  fullName: string;
+  jobTitle: string;
 }
 
 function getAuthSecret(): string {
@@ -63,7 +32,9 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 }
 
 function base64UrlToBytes(base64Url: string): Uint8Array {
-  const padded = base64Url.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((base64Url.length + 3) % 4);
+  const padded =
+    base64Url.replace(/-/g, '+').replace(/_/g, '/') +
+    '==='.slice((base64Url.length + 3) % 4);
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -84,13 +55,21 @@ async function getHmacKey(usage: 'sign' | 'verify'): Promise<CryptoKey> {
 }
 
 interface SessionPayload {
+  v: number;
+  uid: string;
   u: string;
+  r: UserRole;
+  mcp: boolean;
   exp: number;
 }
 
-export async function signSessionToken(user: SessionUser): Promise<string> {
+export async function signSessionToken(user: SessionTokenUser): Promise<string> {
   const payload: SessionPayload = {
+    v: 2,
+    uid: user.id,
     u: user.username,
+    r: user.role === 'ADMIN' ? 'ADMIN' : 'USER',
+    mcp: Boolean(user.mustChangePassword),
     exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
   };
   const encoder = new TextEncoder();
@@ -103,7 +82,7 @@ export async function signSessionToken(user: SessionUser): Promise<string> {
 
 export async function verifySessionToken(
   token: string | undefined | null
-): Promise<SessionUser | null> {
+): Promise<SessionTokenUser | null> {
   if (!token || typeof token !== 'string') return null;
 
   const dotIdx = token.indexOf('.');
@@ -118,6 +97,7 @@ export async function verifySessionToken(
     const sigBytes = base64UrlToBytes(signatureEncoded);
     const sigCopy = new Uint8Array(sigBytes.length);
     sigCopy.set(sigBytes);
+
     const valid = await crypto.subtle.verify(
       'HMAC',
       key,
@@ -131,15 +111,25 @@ export async function verifySessionToken(
 
     if (
       !payload ||
+      payload.v !== 2 ||
+      typeof payload.uid !== 'string' ||
+      !payload.uid ||
       typeof payload.u !== 'string' ||
-      !ALLOWED_USERNAME_SET.has(payload.u) ||
+      !payload.u ||
+      (payload.r !== 'ADMIN' && payload.r !== 'USER') ||
+      typeof payload.mcp !== 'boolean' ||
       typeof payload.exp !== 'number' ||
       payload.exp <= Date.now()
     ) {
       return null;
     }
 
-    return { username: payload.u };
+    return {
+      id: payload.uid,
+      username: payload.u,
+      role: payload.r,
+      mustChangePassword: payload.mcp,
+    };
   } catch {
     return null;
   }
