@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import PwaRegister from '@/components/PwaRegister';
+import { getCurrentUser } from '@/lib/auth';
 
 export const viewport: Viewport = {
   themeColor: '#0f172a',
@@ -41,11 +42,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const currentUser = await getCurrentUser();
+
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
@@ -59,7 +62,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-20 md:pb-8 antialiased transition-colors duration-200">
-        <Navbar />
+        <Navbar currentUser={currentUser} />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>

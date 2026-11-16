@@ -115,12 +115,14 @@ interface ItemState {
 export default function DailyInputClient({
   clusters,
   masterTeams = [],
+  loggedInUserName = '',
   initialClusterId,
   initialDate,
   initialTeam,
 }: {
   clusters: ClusterOption[];
   masterTeams?: TimPelaksanaOption[];
+  loggedInUserName?: string;
   initialClusterId?: string;
   initialDate?: string;
   initialTeam?: string;
@@ -140,7 +142,7 @@ export default function DailyInputClient({
     initialDate ? parseDdMmmYy(initialDate) : new Date()
   );
   const datePickerRef = useRef<HTMLDivElement | null>(null);
-  const [reporterName, setReporterName] = useState<string>('');
+  const reporterName = loggedInUserName;
   const [teamName, setTeamName] = useState<string>(initialTeam || '');
   const [masterTeamList, setMasterTeamList] = useState<TimPelaksanaOption[]>(masterTeams);
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
@@ -342,14 +344,6 @@ export default function DailyInputClient({
   const [deletingReport, setDeletingReport] = useState<boolean>(false);
   const [showWaModal, setShowWaModal] = useState<boolean>(false);
 
-  // Load reporter name from localStorage (team is resolved per-cluster or chosen from TimPelaksana.xlsx)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedReporter = localStorage.getItem('fiberos_reporter');
-      if (savedReporter) setReporterName(savedReporter);
-    }
-  }, []);
-
   // Fetch items whenever cluster changes
   useEffect(() => {
     if (!selectedClusterId) return;
@@ -479,7 +473,6 @@ export default function DailyInputClient({
         setIsEditMode(true);
         setEditingReportId(res.report.id);
         setRenameTeamInput(res.report.teamName);
-        setReporterName(res.report.reporterName);
         setTeamName(res.report.teamName);
         setWeather(res.report.weather);
         setNotes(res.report.notes);
@@ -632,12 +625,6 @@ export default function DailyInputClient({
 
     setSubmitting(true);
     setMessage(null);
-
-    // Save reporter to localStorage
-    if (typeof window !== 'undefined') {
-      if (reporterName) localStorage.setItem('fiberos_reporter', reporterName);
-      if (teamName.trim()) localStorage.setItem('fiberos_team', teamName.trim());
-    }
 
     const res = await submitDailyProgress({
       clusterId: selectedClusterId,
@@ -944,16 +931,19 @@ export default function DailyInputClient({
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Nama Pelapor / Pengawas
+              <span className="ml-1.5 text-[10px] font-normal text-blue-600">
+                (Sesuai akun login)
+              </span>
             </label>
             <div className="relative">
               <input
                 type="text"
+                readOnly
                 value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
-                placeholder="Contoh: Budi (Supervisor)"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                placeholder="Nama pengawas sesuai akun login"
+                className="w-full px-3.5 py-2.5 pr-10 bg-slate-100 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 cursor-not-allowed focus:outline-none"
               />
-              <User className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+              <User className="w-4 h-4 text-blue-500 absolute right-3 top-3 pointer-events-none" />
             </div>
           </div>
 

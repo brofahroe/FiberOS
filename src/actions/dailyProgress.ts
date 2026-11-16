@@ -6,6 +6,7 @@ import { uploadFileToNextcloud } from '@/lib/nextcloud';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 import sitelistData from '@/data/sitelist.json';
 import { DEFAULT_BOQ_WORK_ITEMS } from '@/lib/progressCalculator';
+import { getCurrentUser } from '@/lib/auth';
 import {
   appendTeamToExcelFile,
   formatTimPelaksanaName,
@@ -229,6 +230,12 @@ export async function submitDailyProgress(data: {
     return { success: false, error: 'Nama Tim Pelaksana wajib diisi.' };
   }
 
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    return { success: false, error: 'Sesi login tidak valid. Silakan login kembali.' };
+  }
+  const verifiedReporterName = currentUser.username;
+
   try {
     await ensureDatabaseRestoredFromNextcloud();
     // Resolve clusterId in case a sitelist code was passed
@@ -320,7 +327,7 @@ export async function submitDailyProgress(data: {
         where: { id: existingReport.id },
         data: {
           reportDate: canonicalDate,
-          reporterName: data.reporterName !== undefined ? data.reporterName : existingReport.reporterName,
+          reporterName: verifiedReporterName,
           teamName,
           weather: data.weather || existingReport.weather,
           notes: data.notes !== undefined ? data.notes : existingReport.notes,
@@ -338,7 +345,7 @@ export async function submitDailyProgress(data: {
         data: {
           clusterId: targetClusterId,
           reportDate: canonicalDate,
-          reporterName: data.reporterName,
+          reporterName: verifiedReporterName,
           teamName,
           weather: data.weather,
           notes: data.notes,

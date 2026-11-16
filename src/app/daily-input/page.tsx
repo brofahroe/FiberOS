@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { getMasterTeams } from '@/lib/timPelaksana';
+import { getCurrentUser } from '@/lib/auth';
 import DailyInputClient from './DailyInputClient';
 
 export const revalidate = 0;
@@ -23,13 +24,17 @@ export default async function DailyInputPage({
     console.error('Error fetching clusters for daily input:', err);
   }
 
-  const masterTeams = await getMasterTeams();
+  const [masterTeams, currentUser] = await Promise.all([
+    getMasterTeams(),
+    getCurrentUser(),
+  ]);
 
   return (
     <div className="py-2">
       <DailyInputClient
         clusters={clusters}
         masterTeams={masterTeams}
+        loggedInUserName={currentUser?.username || ''}
         initialClusterId={searchParams.clusterId}
         initialDate={searchParams.date}
         initialTeam={searchParams.team}
