@@ -14,7 +14,7 @@
     "aliases": [
       "Instal 72 cores capacity pole mounted FDT"
     ],
-    "boq": "FDT48",
+    "boq": "FDT72",
     "kategori": "FDT",
     "satuan": "Pcs"
   },
@@ -23,7 +23,7 @@
     "aliases": [
       "Instal 48 cores capacity pole mounted FDT"
     ],
-    "boq": "FDT72",
+    "boq": "FDT48",
     "kategori": "FDT",
     "satuan": "Pcs"
   },
