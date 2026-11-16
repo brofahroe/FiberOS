@@ -4,8 +4,6 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import {
-  Building2,
-  CheckCircle2,
   Layers,
   TrendingUp,
   ArrowRight,
@@ -58,9 +56,6 @@ export default function DashboardSummaryClient({
   // Recalculate KPI and Category metrics for filtered clusters
   const dynamicStats = useMemo(() => {
     const totalClusters = filteredClusters.length;
-    const totalHomePasses = filteredClusters.reduce((s, c) => s + (c.homePasses || 0), 0);
-    const totalBoq = Math.round(filteredClusters.reduce((s, c) => s + c.totalBoq, 0));
-    const totalInstalled = Math.round(filteredClusters.reduce((s, c) => s + c.totalInstalled, 0));
     const overallProgress =
       totalClusters > 0
         ? Math.round(filteredClusters.reduce((s, c) => s + c.percentage, 0) / totalClusters)
@@ -95,13 +90,19 @@ export default function DashboardSummaryClient({
       };
     });
 
+    const poleCategory = computedCategories.find((c) => c.key === 'POLE');
+    const cableCategory = computedCategories.find((c) => c.key === 'CABLE');
+
     return {
       totalClusters,
-      totalHomePasses,
-      totalBoq,
-      totalInstalled,
       overallProgress,
       computedCategories,
+      totalPoleInstalled: poleCategory?.installed ?? 0,
+      totalPoleBoq: poleCategory?.boq ?? 0,
+      polePercentage: poleCategory?.percentage ?? 0,
+      totalCableInstalled: cableCategory?.installed ?? 0,
+      totalCableBoq: cableCategory?.boq ?? 0,
+      cablePercentage: cableCategory?.percentage ?? 0,
     };
   }, [filteredClusters]);
 
@@ -215,18 +216,22 @@ export default function DashboardSummaryClient({
 
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Total Home Pass</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Pole</span>
             <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
-              <Building2 className="w-4 h-4" />
+              <HardHat className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="text-3xl font-extrabold text-slate-900">
-              {dynamicStats.totalHomePasses.toLocaleString()}
+              {Math.round(dynamicStats.totalPoleInstalled).toLocaleString()}
             </span>
-            <span className="text-xs text-slate-500">HP</span>
+            <span className="text-xs text-slate-500">
+              / {Math.round(dynamicStats.totalPoleBoq).toLocaleString()} Btg
+            </span>
           </div>
-          <p className="text-xs text-slate-400 mt-2">Kapasitas jaringan terencana</p>
+          <p className="text-xs text-slate-400 mt-2">
+            Tiang terpasang vs BOQ ({dynamicStats.polePercentage}%)
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
@@ -253,20 +258,22 @@ export default function DashboardSummaryClient({
 
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Volume Terpasang</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">Total Panjang Kabel</span>
             <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
-              <CheckCircle2 className="w-4 h-4" />
+              <Cable className="w-4 h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="text-3xl font-extrabold text-slate-900">
-              {dynamicStats.totalInstalled.toLocaleString()}
+              {Math.round(dynamicStats.totalCableInstalled).toLocaleString()}
             </span>
             <span className="text-xs text-slate-500">
-              / {dynamicStats.totalBoq.toLocaleString()}
+              / {Math.round(dynamicStats.totalCableBoq).toLocaleString()} m
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-2">Total item volume vs BOQ</p>
+          <p className="text-xs text-slate-400 mt-2">
+            Kabel terpasang vs BOQ ({dynamicStats.cablePercentage}%)
+          </p>
         </div>
       </div>
 
