@@ -45,6 +45,22 @@ function getDateVariants(dateStr: string): string[] {
   return Array.from(new Set([dateStr.trim(), canonical]));
 }
 
+function parseReportDateTimestamp(dateStr: string): number {
+  const canonical = normalizeToDdMmmYy(dateStr);
+  const parts = canonical.split('-');
+  if (parts.length === 3 && isNaN(Number(parts[1]))) {
+    const day = parseInt(parts[0], 10);
+    const mIdx = MONTHS_SHORT.findIndex((m) => m.toLowerCase() === parts[1].toLowerCase());
+    const yrRaw = parseInt(parts[2], 10);
+    const year = yrRaw < 100 ? 2000 + yrRaw : yrRaw;
+    if (!isNaN(day) && mIdx >= 0 && !isNaN(year)) {
+      return Date.UTC(year, mIdx, day);
+    }
+  }
+  const parsed = Date.parse(dateStr);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
 async function resolveOrProvisionCluster(clusterIdOrCode: string) {
   if (!clusterIdOrCode) return null;
 
@@ -372,24 +388,99 @@ export async function submitDailyProgress(data: {
 export async function getDailyReportTeams(clusterId: string, reportDate: string) {
   try {
     const dateVariants = getDateVariants(reportDate);
+    const dateVariantSet = new Set(dateVariants.map((d) => d.toLowerCase()));
+    const selectedDateTs = parseReportDateTimestamp(reportDate);
+
     const reports = await prisma.dailyReport.findMany({
-      where: { clusterId, reportDate: { in: dateVariants }, teamName: { not: null } },
-      select: { teamName: true },
-      distinct: ['teamName'],
-      orderBy: { teamName: 'asc' },
+      where: { clusterId, teamName: { not: null } },
+      select: { teamName: true, reportDate: true, updatedAt: true },
     });
+
+    const teamsOnDateSet = new Set<string>();
+    const historyMap = new Map<
+      string,
+      {
+        teamName: string;
+        hasBefore: boolean;
+        lastBeforeTs: number;
+        lastBeforeDate: string;
+        lastAnyTs: number;
+        lastAnyDate: string;
+        updatedAtMs: number;
+      }
+    >();
+
+    for (const r of reports) {
+      const name = r.teamName?.trim() || '';
+      if (!name) continue;
+      const canonicalDate = normalizeToDdMmmYy(r.reportDate);
+      const isSelectedDate =
+        dateVariantSet.has(r.reportDate.trim().toLowerCase()) ||
+        dateVariantSet.has(canonicalDate.toLowerCase());
+
+      if (isSelectedDate) {
+        teamsOnDateSet.add(name);
+        continue;
+      }
+
+      const ts = parseReportDateTimestamp(r.reportDate);
+      const isBefore = selectedDateTs > 0 ? ts < selectedDateTs : true;
+      const upd = r.updatedAt.getTime();
+      const existing = historyMap.get(name);
+
+      if (!existing) {
+        historyMap.set(name, {
+          teamName: name,
+          hasBefore: isBefore,
+          lastBeforeTs: isBefore ? ts : -1,
+          lastBeforeDate: isBefore ? canonicalDate : '',
+          lastAnyTs: ts,
+          lastAnyDate: canonicalDate,
+          updatedAtMs: upd,
+        });
+      } else {
+        if (isBefore && (!existing.hasBefore || ts >= existing.lastBeforeTs)) {
+          existing.hasBefore = true;
+          existing.lastBeforeTs = ts;
+          existing.lastBeforeDate = canonicalDate;
+        }
+        if (ts >= existing.lastAnyTs) {
+          existing.lastAnyTs = ts;
+          existing.lastAnyDate = canonicalDate;
+        }
+        if (upd > existing.updatedAtMs) {
+          existing.updatedAtMs = upd;
+        }
+      }
+    }
+
+    const teams = Array.from(teamsOnDateSet).sort((a, b) => a.localeCompare(b));
+    const previousTeams = Array.from(historyMap.values())
+      .filter((item) => !teamsOnDateSet.has(item.teamName))
+      .sort((a, b) => {
+        if (a.hasBefore !== b.hasBefore) return a.hasBefore ? -1 : 1;
+        const tsDiff = (b.hasBefore ? b.lastBeforeTs : b.lastAnyTs) - (a.hasBefore ? a.lastBeforeTs : a.lastAnyTs);
+        if (tsDiff !== 0) return tsDiff;
+        return b.updatedAtMs - a.updatedAtMs;
+      })
+      .map((item) => ({
+        teamName: item.teamName,
+        lastDate: item.hasBefore ? item.lastBeforeDate : item.lastAnyDate,
+      }));
 
     return {
       success: true,
-      teams: Array.from(new Set(
-        reports
-          .map((report) => report.teamName?.trim() || '')
-          .filter((name) => name.length > 0)
-      )),
+      teams,
+      previousTeams,
     };
   } catch (error: any) {
     console.error('Error fetching report teams:', error);
-    return { success: false, teams: [], error: error.message || 'Gagal memuat daftar tim.' };
+    return {
+      success: false,
+      teams: [] as string[],
+      previousTeams: [] as Array<{ teamName: string; lastDate: string }>,
+      error: error.message || 'Gagal memuat daftar tim.',
+    };
   }
 }
 

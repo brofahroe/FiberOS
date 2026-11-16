@@ -10,7 +10,6 @@ import {
   ChevronLeft,
   ChevronRight,
   User, 
-  Users, 
   Camera, 
   AlertCircle, 
   CheckCircle2, 
@@ -29,6 +28,8 @@ import {
 } from 'lucide-react';
 import WhatsAppReportModal from '@/components/WhatsAppReportModal';
 import { SearchableDropdown } from '@/components/SearchableDropdown/SearchableDropdown';
+import { TeamSelectorDropdown, type PreviousTeamOption } from '@/components/TeamSelectorDropdown';
+import type { TimPelaksanaOption } from '@/lib/timPelaksana';
 import sitelistData from '@/data/sitelist.json';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -113,11 +114,13 @@ interface ItemState {
 
 export default function DailyInputClient({
   clusters,
+  masterTeams = [],
   initialClusterId,
   initialDate,
   initialTeam,
 }: {
   clusters: ClusterOption[];
+  masterTeams?: TimPelaksanaOption[];
   initialClusterId?: string;
   initialDate?: string;
   initialTeam?: string;
@@ -140,7 +143,10 @@ export default function DailyInputClient({
   const [reporterName, setReporterName] = useState<string>('');
   const [teamName, setTeamName] = useState<string>(initialTeam || '');
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+  const [previousTeams, setPreviousTeams] = useState<PreviousTeamOption[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState<boolean>(false);
   const [teamListError, setTeamListError] = useState<string | null>(null);
+  const pendingAutoTeamRef = useRef<boolean>(!initialTeam);
   const [weather, setWeather] = useState<string>('Cerah');
   const [notes, setNotes] = useState<string>('');
 
@@ -270,17 +276,25 @@ export default function DailyInputClient({
     [sitelistOptions]
   );
 
-  // Initialize sitelist selection from initialClusterId
+  // Initialize sitelist selection once from initialClusterId or first cluster
+  const hasInitializedSitelistRef = useRef<boolean>(false);
   useEffect(() => {
+    if (hasInitializedSitelistRef.current) return;
     if (initialClusterId) {
       const dbCluster = clusters.find((c) => c.id === initialClusterId);
       if (dbCluster) {
         const sitelistOpt = findSiteOptionForCluster(dbCluster);
-        if (sitelistOpt) setSelectedSitelistOption(sitelistOpt);
+        if (sitelistOpt) {
+          setSelectedSitelistOption(sitelistOpt);
+          hasInitializedSitelistRef.current = true;
+        }
       }
     } else if (clusters[0] && !selectedSitelistOption) {
       const sitelistOpt = findSiteOptionForCluster(clusters[0]);
-      if (sitelistOpt) setSelectedSitelistOption(sitelistOpt);
+      if (sitelistOpt) {
+        setSelectedSitelistOption(sitelistOpt);
+        hasInitializedSitelistRef.current = true;
+      }
     }
   }, [initialClusterId, clusters, findSiteOptionForCluster, selectedSitelistOption]);
 
@@ -311,15 +325,13 @@ export default function DailyInputClient({
   const [deletingReport, setDeletingReport] = useState<boolean>(false);
   const [showWaModal, setShowWaModal] = useState<boolean>(false);
 
-  // Load reporter and team from localStorage
+  // Load reporter name from localStorage (team is resolved per-cluster or chosen from TimPelaksana.xlsx)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedReporter = localStorage.getItem('fiberos_reporter');
-      const savedTeam = localStorage.getItem('fiberos_team');
       if (savedReporter) setReporterName(savedReporter);
-      if (!initialTeam && savedTeam) setTeamName(savedTeam);
     }
-  }, [initialTeam]);
+  }, []);
 
   // Fetch items whenever cluster changes
   useEffect(() => {
@@ -359,23 +371,40 @@ export default function DailyInputClient({
     };
   }, [selectedClusterId]);
 
-  // Load team names already reported for the selected cluster and date
+  // Load team names reported on this date & previous days for the selected cluster
   useEffect(() => {
     if (!selectedClusterId || !reportDate.trim()) {
       setAvailableTeams([]);
+      setPreviousTeams([]);
+      setLoadingTeams(false);
       setTeamListError(null);
       return;
     }
 
+    if (loadingItems) {
+      setLoadingTeams(true);
+      return;
+    }
+
     let isMounted = true;
+    setLoadingTeams(true);
     setAvailableTeams([]);
+    setPreviousTeams([]);
     setTeamListError(null);
     getDailyReportTeams(selectedClusterId, reportDate.trim()).then((res) => {
       if (!isMounted) return;
+      setLoadingTeams(false);
       if (res.success) {
-        setAvailableTeams(res.teams);
-        if (res.teams.length > 0) {
-          setTeamName((prev) => (prev.trim() ? prev : res.teams[0]));
+        const nextTeams = res.teams || [];
+        const nextPrevious = res.previousTeams || [];
+        setAvailableTeams(nextTeams);
+        setPreviousTeams(nextPrevious);
+
+        if (pendingAutoTeamRef.current) {
+          pendingAutoTeamRef.current = false;
+          setTeamName(nextTeams[0] || nextPrevious[0]?.teamName || '');
+        } else if (nextTeams.length > 0) {
+          setTeamName((prev) => (prev.trim() ? prev : nextTeams[0]));
         }
       } else {
         setTeamListError(res.error || 'Gagal memuat daftar tim.');
@@ -385,7 +414,7 @@ export default function DailyInputClient({
     return () => {
       isMounted = false;
     };
-  }, [selectedClusterId, reportDate]);
+  }, [selectedClusterId, reportDate, loadingItems]);
 
   // Check if a report already exists for the selected cluster, date, and team
   useEffect(() => {
@@ -700,7 +729,11 @@ export default function DailyInputClient({
             <SearchableDropdown
               options={sitelistOptions}
               value={selectedSitelistOption}
-              onChange={setSelectedSitelistOption}
+              onChange={(opt) => {
+                pendingAutoTeamRef.current = true;
+                setTeamName('');
+                setSelectedSitelistOption(opt);
+              }}
               label="Pilih Cluster"
               required
               placeholder="Ketik nama cluster..."
@@ -912,45 +945,15 @@ export default function DailyInputClient({
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Tim Pelaksana / Vendor <span className="text-rose-500">*</span>
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                placeholder="Contoh: Tim Tarik Kabel 1"
-                list="daily-report-teams"
-                required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-              />
-              <Users className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
-              <datalist id="daily-report-teams">
-                {availableTeams.map((team) => (
-                  <option key={team} value={team} />
-                ))}
-              </datalist>
-            </div>
-            {availableTeams.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-slate-500">Tim di tanggal ini:</span>
-                {availableTeams.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTeamName(t)}
-                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border transition ${
-                      teamName.trim() === t
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            )}
-            {teamListError && (
-              <p className="mt-1 text-[11px] text-rose-600">{teamListError}</p>
-            )}
+            <TeamSelectorDropdown
+              value={teamName}
+              onChange={setTeamName}
+              teamsOnDate={availableTeams}
+              previousTeams={previousTeams}
+              masterTeams={masterTeams}
+              loadingTeams={loadingTeams}
+              error={teamListError}
+            />
           </div>
 
           {/* Weather */}
@@ -1037,9 +1040,15 @@ export default function DailyInputClient({
                   type="text"
                   value={renameTeamInput}
                   onChange={(e) => setRenameTeamInput(e.target.value)}
+                  list="tim-pelaksana-rename-list"
                   placeholder="Masukkan nama tim baru..."
                   className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+                <datalist id="tim-pelaksana-rename-list">
+                  {masterTeams.map((mt) => (
+                    <option key={mt.tim} value={mt.tim} />
+                  ))}
+                </datalist>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
