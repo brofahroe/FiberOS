@@ -58,7 +58,7 @@ export default function WhatsAppReportModal({
   const [city, setCity] = useState<string>('BLORA');
   const [olt, setOlt] = useState<string>('Balun');
   const [ztePic, setZtePic] = useState<string>('HENDRI');
-  const [subconName, setSubconName] = useState<string>('GCI');
+  const FIXED_SUBCON_NAME = 'PT. GCI Indonesia';
   const [teamQty, setTeamQty] = useState<string>('7 Orang');
   const [subconLeader, setSubconLeader] = useState<string>('RICKY');
   const [startImDate, setStartImDate] = useState<string>('01/11/26');
@@ -101,7 +101,6 @@ export default function WhatsAppReportModal({
       const savedCity = localStorage.getItem('wa_city');
       const savedOlt = localStorage.getItem('wa_olt');
       const savedZtePic = localStorage.getItem('wa_ztePic');
-      const savedSubcon = localStorage.getItem('wa_subcon');
       const savedTeamQty = localStorage.getItem('wa_teamQty');
       const savedLeader = localStorage.getItem('wa_leader');
       const savedStartIm = localStorage.getItem('wa_startIm');
@@ -111,7 +110,6 @@ export default function WhatsAppReportModal({
       if (savedCity) setCity(savedCity);
       if (savedOlt) setOlt(savedOlt);
       if (savedZtePic) setZtePic(savedZtePic);
-      if (savedSubcon) setSubconName(savedSubcon);
       if (savedTeamQty) setTeamQty(savedTeamQty);
       if (savedLeader) setSubconLeader(savedLeader);
       if (savedStartIm) setStartImDate(savedStartIm);
@@ -125,7 +123,6 @@ export default function WhatsAppReportModal({
       localStorage.setItem('wa_city', city);
       localStorage.setItem('wa_olt', olt);
       localStorage.setItem('wa_ztePic', ztePic);
-      localStorage.setItem('wa_subcon', subconName);
       localStorage.setItem('wa_teamQty', teamQty);
       localStorage.setItem('wa_leader', subconLeader);
       localStorage.setItem('wa_startIm', startImDate);
@@ -165,7 +162,6 @@ export default function WhatsAppReportModal({
         if (primary.siteId) setSiteId(primary.siteId);
         if (primary.oltName) setOlt(primary.oltName);
         if (primary.reporterName) setSubconLeader(primary.reporterName);
-        if (primary.teamName) setSubconName(primary.teamName);
       }
       setCustomMessage(null); // Reset manual edit to show fresh report
     }
@@ -245,9 +241,6 @@ export default function WhatsAppReportModal({
       : itemData.officialSiteName || `KELURAHAN ${itemData.clusterName.toUpperCase()} BLORA`;
     const effectiveSiteId = isSingleSelection ? siteId || itemData.siteId : itemData.siteId;
     const effectiveOlt = isSingleSelection ? olt || itemData.oltName : itemData.oltName || olt;
-    const effectiveSubcon = isSingleSelection
-      ? subconName
-      : itemData.teamName || subconName;
     const effectiveLeader = isSingleSelection
       ? subconLeader
       : itemData.reporterName || subconLeader;
@@ -259,7 +252,7 @@ Site ID:  *${effectiveSiteId}*
 City: ${city}
 OLT: ${effectiveOlt}
 ZTE PIC :  ${ztePic}
-Subcon name : ${effectiveSubcon}
+Subcon name : ${FIXED_SUBCON_NAME}
 Subcon teams Qty : ${teamQty}
 Subcon leader : ${effectiveLeader}
 Tanggal Start IM: ${startImDate}
@@ -590,12 +583,12 @@ Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
                       />
                     </div>
                     <div>
-                      <label className="font-semibold text-slate-600 block mb-1">Subcon Name</label>
+                      <label className="font-semibold text-slate-600 block mb-1">Subcon Name (Fix)</label>
                       <input
                         type="text"
-                        value={subconName}
-                        onChange={(e) => setSubconName(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                        readOnly
+                        value={FIXED_SUBCON_NAME}
+                        className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg font-semibold text-slate-600 cursor-not-allowed"
                       />
                     </div>
                     <div>
