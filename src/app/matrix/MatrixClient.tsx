@@ -466,19 +466,19 @@ export default function MatrixClient({
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-20 shadow-sm">
               <tr>
-                <th className="p-3 border-b border-r border-slate-200 min-w-[140px] sticky left-0 bg-slate-100 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                <th className="p-3 border-b border-r border-slate-200 w-[140px] min-w-[140px] max-w-[140px] sticky left-0 bg-slate-100 z-30">
                   Cluster
                 </th>
-                <th className="p-3 border-b border-r border-slate-200 w-16 text-center">
+                <th className="p-3 border-b border-r border-slate-200 w-[64px] min-w-[64px] max-w-[64px] text-center sticky left-[140px] bg-slate-100 z-30">
                   HP
                 </th>
-                <th className="p-3 border-b border-r border-slate-200 w-24 text-center">
+                <th className="p-3 border-b border-r border-slate-200 w-[96px] min-w-[96px] max-w-[96px] text-center sticky left-[204px] bg-slate-100 z-30">
                   Scope
                 </th>
-                <th className="p-3 border-b border-r border-slate-200 min-w-[200px]">
+                <th className="p-3 border-b border-r border-slate-200 w-[200px] min-w-[200px] max-w-[200px] sticky left-[300px] bg-slate-100 z-30">
                   Item Pekerjaan
                 </th>
-                <th className="p-3 border-b border-r border-slate-200 w-16 text-center">
+                <th className="p-3 border-b border-r border-slate-200 w-[64px] min-w-[64px] max-w-[64px] text-center sticky left-[500px] bg-slate-100 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                   Satuan
                 </th>
 
@@ -596,13 +596,13 @@ export default function MatrixClient({
 
                   return (
                     <tr key={idx} className="hover:bg-blue-50/30 transition group">
-                      <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                      <td className="p-2.5 font-bold text-slate-900 border-r border-slate-200 w-[140px] min-w-[140px] max-w-[140px] sticky left-0 bg-white group-hover:bg-slate-50 z-10">
                         {row.clusterName}
                       </td>
-                      <td className="p-2.5 text-center border-r border-slate-100 text-slate-500">
+                      <td className="p-2.5 text-center border-r border-slate-100 text-slate-500 w-[64px] min-w-[64px] max-w-[64px] sticky left-[140px] bg-white group-hover:bg-slate-50 z-10">
                         {row.homePasses || ''}
                       </td>
-                      <td className="p-2.5 text-center border-r border-slate-100">
+                      <td className="p-2.5 text-center border-r border-slate-100 w-[96px] min-w-[96px] max-w-[96px] sticky left-[204px] bg-white group-hover:bg-slate-50 z-10">
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                             row.scope === 'SUBFEEDER'
@@ -613,10 +613,10 @@ export default function MatrixClient({
                           {row.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
                         </span>
                       </td>
-                      <td className="p-2.5 font-medium border-r border-slate-100 text-slate-800">
+                      <td className="p-2.5 font-medium border-r border-slate-100 text-slate-800 w-[200px] min-w-[200px] max-w-[200px] sticky left-[300px] bg-white group-hover:bg-slate-50 z-10">
                         {row.itemName}
                       </td>
-                      <td className="p-2.5 text-center border-r border-slate-100 text-slate-400">
+                      <td className="p-2.5 text-center border-r border-slate-100 text-slate-400 w-[64px] min-w-[64px] max-w-[64px] sticky left-[500px] bg-white group-hover:bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                         {row.unit}
                       </td>
 
