@@ -294,7 +294,7 @@ export default function DashboardSummaryClient({
             return (
               <div
                 key={cat.key}
-                className="p-4 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 transition"
+                className="p-4 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
