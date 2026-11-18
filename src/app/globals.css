@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
+  --background: #e4ebf3;
   --foreground: #0f172a;
 }
 
@@ -72,6 +72,114 @@ html.dark .table-scrollbar::-webkit-scrollbar-thumb {
 }
 html.dark .table-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #64748b;
+}
+
+/* ============================================================================
+   Light Theme Contrast & Border Reinforcement (:where keeps zero extra
+   specificity and affects ONLY html:not(.dark))
+   ============================================================================ */
+
+:where(html:not(.dark)) body {
+  background-color: #e4ebf3;
+}
+
+/* Crisp contrast surfaces in light mode */
+:where(html:not(.dark)) .bg-slate-50 {
+  background-color: #eef3f8;
+}
+:where(html:not(.dark)) .bg-slate-50\/50,
+:where(html:not(.dark)) .bg-slate-50\/70,
+:where(html:not(.dark)) .bg-slate-50\/80 {
+  background-color: rgba(235, 241, 248, 0.9);
+}
+:where(html:not(.dark)) .bg-slate-100 {
+  background-color: #dde5f0;
+}
+:where(html:not(.dark)) .bg-slate-100\/70,
+:where(html:not(.dark)) .bg-slate-100\/80 {
+  background-color: rgba(221, 229, 240, 0.9);
+}
+:where(html:not(.dark)) .bg-slate-200 {
+  background-color: #cbd5e1;
+}
+:where(html:not(.dark)) .bg-slate-200\/70 {
+  background-color: rgba(203, 213, 225, 0.85);
+}
+
+/* Stronger, thicker borders on cards, panels, inputs, and headers in light mode */
+:where(html:not(.dark)) .border {
+  border-width: 2px;
+}
+:where(html:not(.dark)) .border-b {
+  border-bottom-width: 2px;
+}
+:where(html:not(.dark)) .border-t {
+  border-top-width: 2px;
+}
+:where(html:not(.dark)) .border-slate-100 {
+  border-color: #cbd5e1;
+}
+:where(html:not(.dark)) .border-slate-200 {
+  border-color: #94a3b8;
+}
+:where(html:not(.dark)) .border-slate-300 {
+  border-color: #64748b;
+}
+:where(html:not(.dark)) .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #cbd5e1;
+}
+:where(html:not(.dark)) .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #94a3b8;
+}
+
+/* Darker secondary typography & clearer tinted accents in light mode */
+:where(html:not(.dark)) .text-slate-400 {
+  color: #475569;
+}
+:where(html:not(.dark)) .bg-slate-900 .text-slate-400 {
+  color: #94a3b8;
+}
+:where(html:not(.dark)) .text-slate-500 {
+  color: #334155;
+}
+:where(html:not(.dark)) .text-slate-600 {
+  color: #1e293b;
+}
+:where(html:not(.dark)) .bg-blue-50 {
+  background-color: #dbeafe;
+}
+:where(html:not(.dark)) .border-blue-100,
+:where(html:not(.dark)) .border-blue-200 {
+  border-color: #93c5fd;
+}
+:where(html:not(.dark)) .border-blue-300 {
+  border-color: #60a5fa;
+}
+:where(html:not(.dark)) .bg-emerald-50 {
+  background-color: #d1fae5;
+}
+:where(html:not(.dark)) .border-emerald-200,
+:where(html:not(.dark)) .border-emerald-300 {
+  border-color: #6ee7b7;
+}
+:where(html:not(.dark)) .bg-indigo-50 {
+  background-color: #e0e7ff;
+}
+:where(html:not(.dark)) .border-indigo-200 {
+  border-color: #a5b4fc;
+}
+:where(html:not(.dark)) .bg-amber-50 {
+  background-color: #fef3c7;
+}
+:where(html:not(.dark)) .border-amber-200,
+:where(html:not(.dark)) .border-amber-300 {
+  border-color: #fcd34d;
+}
+:where(html:not(.dark)) .bg-rose-50 {
+  background-color: #ffe4e6;
+}
+:where(html:not(.dark)) .border-rose-200 {
+  border-color: #fda4af;
 }
 
 /* ============================================================================
