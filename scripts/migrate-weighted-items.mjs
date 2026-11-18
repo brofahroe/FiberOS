@@ -156,12 +156,21 @@ async function main() {
       },
       {
         workType: 'CW',
+        category: 'CABLE',
+        subCategory: 'CABLE',
+        weight: 20,
+        itemName: 'Kabel 288c',
+        unit: 'Meter',
+        sortOrder: 10,
+      },
+      {
+        workType: 'CW',
         category: 'SELING',
         subCategory: 'ACC',
         weight: 10,
         itemName: 'Seling',
         unit: 'Meter',
-        sortOrder: 13,
+        sortOrder: 14,
       },
     ];
 

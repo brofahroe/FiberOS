@@ -10,6 +10,15 @@
     "satuan": "Pcs"
   },
   {
+    "itemPekerjaan": "Instal 48 cores capacity pole mounted FDT",
+    "aliases": [
+      "Instal 48 cores capacity pole mounted FDT"
+    ],
+    "boq": "FDT48",
+    "kategori": "FDT",
+    "satuan": "Pcs"
+  },
+  {
     "itemPekerjaan": "Instal 72 cores capacity pole mounted FDT",
     "aliases": [
       "Instal 72 cores capacity pole mounted FDT"
@@ -19,12 +28,13 @@
     "satuan": "Pcs"
   },
   {
-    "itemPekerjaan": "Instal 48 cores capacity pole mounted FDT",
+    "itemPekerjaan": "Fiber Optic Joint Closure Type In-line 24 Core",
     "aliases": [
-      "Instal 48 cores capacity pole mounted FDT"
+      "Fiber Optic Joint Closure Type In-line 24 Core",
+      "Fiber Optic Joint Closure Type Inline 24 Core"
     ],
-    "boq": "FDT48",
-    "kategori": "FDT",
+    "boq": "Joint Closure (JC)",
+    "kategori": "JC",
     "satuan": "Pcs"
   },
   {
@@ -48,6 +58,16 @@
     "satuan": "Pcs"
   },
   {
+    "itemPekerjaan": "Fiber Optic Joint Closure Type Inline 288 Core",
+    "aliases": [
+      "Fiber Optic Joint Closure Type Inline 288 Core",
+      "Fiber Optic Joint Closure Type In-line 288 Core"
+    ],
+    "boq": "Joint Closure (JC)",
+    "kategori": "JC",
+    "satuan": "Pcs"
+  },
+  {
     "itemPekerjaan": "Instal FO core type SM G.652.D-ADSS 144 cores",
     "aliases": [
       "Instal FO core type SM G.652.D-ADSS 144 cores"
@@ -62,6 +82,16 @@
       "Instal FO core type SM G.652.D-ADSS 24 cores"
     ],
     "boq": "Kabel 24c",
+    "kategori": "CABLE",
+    "satuan": "Meter"
+  },
+  {
+    "itemPekerjaan": "Instal  FO core type SM G.652.D-ADSS 288 cores",
+    "aliases": [
+      "Instal  FO core type SM G.652.D-ADSS 288 cores",
+      "Instal FO core type SM G.652.D-ADSS 288 cores"
+    ],
+    "boq": "Kabel 288c",
     "kategori": "CABLE",
     "satuan": "Meter"
   },

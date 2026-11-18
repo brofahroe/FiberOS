@@ -352,7 +352,7 @@ export default function ImportBoqClient() {
               >
                 {showAllRefItems
                   ? `Tampilkan Hanya Volume > 0 (${activeSheetData.items.length})`
-                  : `Tampilkan Semua 14 Item Acuan`}
+                  : `Tampilkan Semua ${activeSheetData.allReferenceItems.length} Item Acuan`}
               </button>
 
               <button
