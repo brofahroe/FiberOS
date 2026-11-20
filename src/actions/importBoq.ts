@@ -482,18 +482,84 @@ export async function commitBoqImport(data: {
     );
 
     // Remove legacy/unmapped or 0-progress placeholder items in this cluster+scope that are not in the new BOQ import
+    const legacySfTargetMap: Record<string, string> = {
+      'tiang feeder (pole sf)': 'Pole 7m "4"',
+      'kabel feeder (cable sf)': 'Kabel 48c',
+    };
+
     const existingWorkItems = await prisma.workItem.findMany({
       where: {
         clusterId: cluster.id,
         scope,
       },
       include: {
-        progressList: { select: { id: true } },
+        progressList: true,
       },
     });
 
     for (const oldItem of existingWorkItems) {
       const oldLower = oldItem.itemName.trim().toLowerCase();
+      const legacyTargetName = scope === 'SUBFEEDER' ? legacySfTargetMap[oldLower] : undefined;
+      if (legacyTargetName) {
+        const targetItemDef = itemsToSave.find(
+          (it) => it.boqName.trim().toLowerCase() === legacyTargetName.toLowerCase()
+        );
+        if (targetItemDef) {
+          const { workType, subCategory, weight } = getWorkItemWeightAndType(
+            targetItemDef.category,
+            'SUBFEEDER'
+          );
+          const targetWorkItem = await prisma.workItem.upsert({
+            where: {
+              clusterId_scope_itemName: {
+                clusterId: cluster.id,
+                scope: 'SUBFEEDER',
+                itemName: targetItemDef.boqName,
+              },
+            },
+            update: {},
+            create: {
+              clusterId: cluster.id,
+              scope: 'SUBFEEDER',
+              workType,
+              category: targetItemDef.category,
+              subCategory,
+              weight,
+              itemName: targetItemDef.boqName,
+              unit: targetItemDef.unit,
+              boq: targetItemDef.quantity,
+              sortOrder: 100,
+            },
+          });
+
+          for (const prog of oldItem.progressList) {
+            const existingTargetProg = await prisma.dailyProgressItem.findUnique({
+              where: {
+                dailyReportId_workItemId: {
+                  dailyReportId: prog.dailyReportId,
+                  workItemId: targetWorkItem.id,
+                },
+              },
+            });
+            if (existingTargetProg) {
+              await prisma.dailyProgressItem.update({
+                where: { id: existingTargetProg.id },
+                data: { quantity: existingTargetProg.quantity + prog.quantity },
+              });
+              await prisma.dailyProgressItem.delete({ where: { id: prog.id } });
+            } else {
+              await prisma.dailyProgressItem.update({
+                where: { id: prog.id },
+                data: { workItemId: targetWorkItem.id },
+              });
+            }
+          }
+
+          await prisma.workItem.delete({ where: { id: oldItem.id } });
+          continue;
+        }
+      }
+
       const shouldNotExistInCluster = scope === 'CLUSTER' && isSubfeederOnlyBoqItem(oldItem.itemName);
       if (
         (!savedNamesForCurrentScope.has(oldLower) || shouldNotExistInCluster) &&

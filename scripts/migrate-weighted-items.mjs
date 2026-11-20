@@ -17,6 +17,59 @@ try {
 
 const SUBFEEDER_ONLY_CABLES = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
 
+const LEGACY_SF_MAPPINGS = {
+  'tiang feeder (pole sf)': {
+    scope: 'SUBFEEDER',
+    workType: 'CW',
+    category: 'POLE',
+    subCategory: 'POLE',
+    weight: 50,
+    itemName: 'Pole 7m "4"',
+    unit: 'Btg',
+    sortOrder: 100,
+  },
+  'kabel feeder (cable sf)': {
+    scope: 'SUBFEEDER',
+    workType: 'CW',
+    category: 'CABLE',
+    subCategory: 'CABLE',
+    weight: 20,
+    itemName: 'Kabel 48c',
+    unit: 'Meter',
+    sortOrder: 101,
+  },
+};
+
+async function moveProgressItemsToTarget(sourceWorkItemId, targetWorkItemId) {
+  const sourceProgress = await prisma.dailyProgressItem.findMany({
+    where: { workItemId: sourceWorkItemId },
+  });
+
+  for (const prog of sourceProgress) {
+    const existingTargetProg = await prisma.dailyProgressItem.findUnique({
+      where: {
+        dailyReportId_workItemId: {
+          dailyReportId: prog.dailyReportId,
+          workItemId: targetWorkItemId,
+        },
+      },
+    });
+
+    if (existingTargetProg) {
+      await prisma.dailyProgressItem.update({
+        where: { id: existingTargetProg.id },
+        data: { quantity: existingTargetProg.quantity + prog.quantity },
+      });
+      await prisma.dailyProgressItem.delete({ where: { id: prog.id } });
+    } else {
+      await prisma.dailyProgressItem.update({
+        where: { id: prog.id },
+        data: { workItemId: targetWorkItemId },
+      });
+    }
+  }
+}
+
 async function main() {
   console.log('--- Starting Weighted Items & Sitelist Metadata Migration ---');
 
@@ -80,10 +133,51 @@ async function main() {
       });
     }
 
-    // 1. Update existing items (and enforce Kabel 96c/144c/288c belong ONLY in SUBFEEDER)
+    // 1. Update existing items (and enforce Kabel 96c/144c/288c belong ONLY in SUBFEEDER,
+    //    plus migrate legacy Tiang Feeder -> Pole 7m "4" & Kabel Feeder -> Kabel 48c)
     for (const item of cluster.workItems) {
       const name = item.itemName.toLowerCase();
       const trimmedLower = name.trim();
+
+      const legacyTargetDef = LEGACY_SF_MAPPINGS[trimmedLower];
+      if (legacyTargetDef) {
+        const targetItem = await prisma.workItem.upsert({
+          where: {
+            clusterId_scope_itemName: {
+              clusterId: cluster.id,
+              scope: legacyTargetDef.scope,
+              itemName: legacyTargetDef.itemName,
+            },
+          },
+          update: {},
+          create: {
+            clusterId: cluster.id,
+            scope: legacyTargetDef.scope,
+            workType: legacyTargetDef.workType,
+            category: legacyTargetDef.category,
+            subCategory: legacyTargetDef.subCategory,
+            weight: legacyTargetDef.weight,
+            itemName: legacyTargetDef.itemName,
+            unit: legacyTargetDef.unit,
+            boq: item.boq,
+            status: item.status || 'ONGOING',
+            sortOrder: legacyTargetDef.sortOrder,
+          },
+        });
+
+        if (targetItem.boq === 0 && item.boq > 0) {
+          await prisma.workItem.update({
+            where: { id: targetItem.id },
+            data: { boq: item.boq },
+          });
+        }
+
+        await moveProgressItemsToTarget(item.id, targetItem.id);
+        await prisma.workItem.delete({ where: { id: item.id } });
+        console.log(`  Migrated legacy "${item.itemName}" -> "${targetItem.itemName}" (SF)`);
+        continue;
+      }
+
       const cat = (item.category || '').toUpperCase();
       let scope = item.scope || 'CLUSTER';
       if (name.includes('feeder') || name.includes('sf-') || SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
