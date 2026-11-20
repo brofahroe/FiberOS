@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import { Layers, PlusCircle, FileSpreadsheet, Building2 } from 'lucide-react';
-import { calculateClusterProgress } from '@/lib/progressCalculator';
+import { calculateClusterProgress, sortWorkItems } from '@/lib/progressCalculator';
 
 export const revalidate = 0;
 
@@ -65,7 +65,8 @@ export default async function ClustersPage() {
 
           const clusterCalc = calculateClusterProgress(calcInput);
 
-          const items = (cluster.workItems || []).map((it: any) => {
+          const sortedRawItems = sortWorkItems(cluster.workItems || []);
+          const items = sortedRawItems.map((it: any) => {
             const installed = (it.progressList || []).reduce((sum: number, p: any) => sum + p.quantity, 0);
             const isDone = it.status === 'DONE';
             const remaining = isDone ? 0 : Math.max(0, it.boq - installed);

@@ -7,7 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import boqListFallback from '@/data/boq-list.json';
 import sitelistData from '@/data/sitelist.json';
-import { isSubfeederOnlyBoqItem } from '@/lib/progressCalculator';
+import { getCanonicalWorkItemSortOrder, isSubfeederOnlyBoqItem } from '@/lib/progressCalculator';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 
 export interface BoqReferenceRule {
@@ -569,13 +569,17 @@ export async function commitBoqImport(data: {
       }
     }
 
-    let clrSortOrder = 1;
-    let sfSortOrder = 100;
     for (const it of itemsToSave) {
       const targetScope: 'CLUSTER' | 'SUBFEEDER' = isSubfeederOnlyBoqItem(it.boqName)
         ? 'SUBFEEDER'
         : scope;
       const { workType, subCategory, weight } = getWorkItemWeightAndType(it.category, targetScope);
+      const sortOrder = getCanonicalWorkItemSortOrder({
+        scope: targetScope,
+        category: it.category,
+        subCategory,
+        itemName: it.boqName,
+      });
 
       await prisma.workItem.upsert({
         where: {
@@ -592,6 +596,7 @@ export async function commitBoqImport(data: {
           workType,
           weight,
           unit: it.unit,
+          sortOrder,
         },
         create: {
           clusterId: cluster.id,
@@ -603,7 +608,7 @@ export async function commitBoqImport(data: {
           itemName: it.boqName,
           unit: it.unit,
           boq: it.quantity,
-          sortOrder: targetScope === 'SUBFEEDER' ? sfSortOrder++ : clrSortOrder++,
+          sortOrder,
         },
       });
     }

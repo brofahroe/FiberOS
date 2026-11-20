@@ -282,19 +282,105 @@ export const DEFAULT_BOQ_WORK_ITEMS = [
   { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "3"', unit: 'Btg', sortOrder: 2 },
   { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 3 },
   { scope: 'CLUSTER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 40, itemName: 'Pole 9m "4"', unit: 'Btg', sortOrder: 4 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 5 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 6 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 7 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Pcs', sortOrder: 8 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Pcs', sortOrder: 9 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Pcs', sortOrder: 10 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'SELING', subCategory: 'ACC', weight: 10, itemName: 'Seling', unit: 'Meter', sortOrder: 11 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 100 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 101 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 102 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 103 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 104 },
-  { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 105 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 1024 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 1036 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 1048 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Pcs', sortOrder: 2001 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Pcs', sortOrder: 3048 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Pcs', sortOrder: 3072 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'SELING', subCategory: 'ACC', weight: 10, itemName: 'Seling', unit: 'Meter', sortOrder: 5001 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 10003 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 11048 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 11096 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 11144 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 11288 },
+  { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 14001 },
 ] as const;
+
+export interface WorkItemSortInput {
+  scope?: string | null;
+  category?: string | null;
+  subCategory?: string | null;
+  itemName: string;
+}
+
+function getCategoryOrderRank(item: WorkItemSortInput): number {
+  const { subCategory } = normalizeItemClassification({
+    id: '',
+    scope: item.scope,
+    category: item.category,
+    subCategory: item.subCategory,
+    itemName: item.itemName,
+    boq: 0,
+    installed: 0,
+    status: 'ONGOING',
+  });
+
+  switch (subCategory) {
+    case 'POLE':
+      return 0;
+    case 'CABLE':
+      return 1;
+    case 'FAT':
+      return 2;
+    case 'FDT':
+      return 3;
+    case 'JC':
+      return 4;
+    default:
+      return 5;
+  }
+}
+
+function getWithinCategoryRank(catRank: number, itemName: string): number {
+  const lower = (itemName || '').trim().toLowerCase();
+
+  if (catRank === 0) {
+    if (lower.includes('7m') && lower.includes('2.5')) return 1;
+    if (lower.includes('7m') && lower.includes('3')) return 2;
+    if (lower.includes('7m') && lower.includes('4')) return 3;
+    if (lower.includes('9m') && lower.includes('4')) return 4;
+    return 50;
+  }
+
+  if (catRank === 1) {
+    const coreMatch = lower.match(/(\d+)\s*c\b/);
+    if (coreMatch) return parseInt(coreMatch[1], 10);
+    return 500;
+  }
+
+  if (catRank === 3) {
+    if (lower === 'fdt') return 1;
+    const fdtMatch = lower.match(/(\d+)/);
+    if (fdtMatch) return parseInt(fdtMatch[1], 10);
+    return 900;
+  }
+
+  if (catRank === 5) {
+    if (lower === 'seling') return 1;
+    return 50;
+  }
+
+  return 1;
+}
+
+/**
+ * Menghasilkan urutan canonical: Scope (CLR -> SF), lalu Pole -> Kabel -> FAT -> FDT -> JC -> Seling/Lainnya.
+ */
+export function getCanonicalWorkItemSortOrder(item: WorkItemSortInput): number {
+  const scopeRank =
+    item.scope === 'SUBFEEDER' || isSubfeederOnlyBoqItem(item.itemName || '') ? 1 : 0;
+  const catRank = getCategoryOrderRank(item);
+  const withinRank = getWithinCategoryRank(catRank, item.itemName);
+  return scopeRank * 10000 + catRank * 1000 + withinRank;
+}
+
+export function sortWorkItems<T extends WorkItemSortInput>(items: readonly T[]): T[] {
+  return [...items].sort((a, b) => {
+    const diff = getCanonicalWorkItemSortOrder(a) - getCanonicalWorkItemSortOrder(b);
+    if (diff !== 0) return diff;
+    return (a.itemName || '').localeCompare(b.itemName || '');
+  });
+}
 
 

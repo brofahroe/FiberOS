@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { uploadFileToNextcloud } from '@/lib/nextcloud';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 import sitelistData from '@/data/sitelist.json';
-import { DEFAULT_BOQ_WORK_ITEMS } from '@/lib/progressCalculator';
+import { DEFAULT_BOQ_WORK_ITEMS, sortWorkItems } from '@/lib/progressCalculator';
 import { getCurrentUser } from '@/lib/auth';
 import {
   appendTeamToExcelFile,
@@ -184,7 +184,7 @@ export async function getClusterItemsForForm(clusterId: string) {
 
   if (!cluster) return null;
 
-  const items = cluster.workItems.map((item) => {
+  const items = sortWorkItems(cluster.workItems).map((item) => {
     const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
     const isDone = item.status === 'DONE';
     const remaining = isDone ? 0 : Math.max(0, item.boq - installed);

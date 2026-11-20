@@ -10,7 +10,7 @@ import {
   formatCanonicalReportDate,
   parseReportDateMs,
 } from '@/lib/dbSync';
-import { calculateClusterProgress } from '@/lib/progressCalculator';
+import { calculateClusterProgress, sortWorkItems } from '@/lib/progressCalculator';
 import sitelistData from '@/data/sitelist.json';
 
 export async function getDashboardData() {
@@ -112,7 +112,8 @@ export async function getDashboardData() {
 
     const clusterCalc = calculateClusterProgress(calcInput);
 
-    const itemsSummary = cluster.workItems.map((item) => {
+    const sortedWorkItems = sortWorkItems(cluster.workItems);
+    const itemsSummary = sortedWorkItems.map((item) => {
       const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
       const isDone = item.status === 'DONE';
       const remaining = isDone ? 0 : Math.max(0, item.boq - installed);

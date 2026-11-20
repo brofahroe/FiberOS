@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import * as excel from 'xlsx';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
+import { sortWorkItems } from '@/lib/progressCalculator';
 import {
   backupDatabaseToNextcloud,
   ensureDatabaseRestoredFromNextcloud,
@@ -88,7 +89,8 @@ export async function getMatrixData(filterClusterId?: string) {
 
   for (const cluster of clusters) {
     let isFirstClusterRow = true;
-    for (const item of cluster.workItems) {
+    const sortedWorkItems = sortWorkItems(cluster.workItems);
+    for (const item of sortedWorkItems) {
       const dailyValues: { [dateStr: string]: number } = {};
       let totalInstalled = 0;
 

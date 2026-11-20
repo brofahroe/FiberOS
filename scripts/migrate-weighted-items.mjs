@@ -17,6 +17,32 @@ try {
 
 const SUBFEEDER_ONLY_CABLES = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
 
+function getCanonicalSortOrder(scope, subCategory, itemName) {
+  const scopeRank = scope === 'SUBFEEDER' ? 1 : 0;
+  const catRankMap = { POLE: 0, CABLE: 1, FAT: 2, FDT: 3, JC: 4 };
+  const catRank = catRankMap[subCategory] ?? 5;
+  const lower = (itemName || '').trim().toLowerCase();
+
+  let withinRank = 1;
+  if (catRank === 0) {
+    if (lower.includes('7m') && lower.includes('2.5')) withinRank = 1;
+    else if (lower.includes('7m') && lower.includes('3')) withinRank = 2;
+    else if (lower.includes('7m') && lower.includes('4')) withinRank = 3;
+    else if (lower.includes('9m') && lower.includes('4')) withinRank = 4;
+    else withinRank = 50;
+  } else if (catRank === 1) {
+    const coreMatch = lower.match(/(\d+)\s*c\b/);
+    withinRank = coreMatch ? parseInt(coreMatch[1], 10) : 500;
+  } else if (catRank === 3) {
+    const fdtMatch = lower.match(/(\d+)/);
+    withinRank = lower === 'fdt' ? 1 : fdtMatch ? parseInt(fdtMatch[1], 10) : 900;
+  } else if (catRank === 5) {
+    withinRank = lower === 'seling' ? 1 : 50;
+  }
+
+  return scopeRank * 10000 + catRank * 1000 + withinRank;
+}
+
 const LEGACY_SF_MAPPINGS = {
   'tiang feeder (pole sf)': {
     scope: 'SUBFEEDER',
@@ -247,6 +273,8 @@ async function main() {
         unit = 'Pcs';
       }
 
+      const canonicalSortOrder = getCanonicalSortOrder(scope, subCategory, item.itemName);
+
       await prisma.workItem.update({
         where: { id: item.id },
         data: {
@@ -255,6 +283,7 @@ async function main() {
           subCategory,
           weight,
           unit,
+          sortOrder: canonicalSortOrder,
         },
       });
     }
@@ -314,6 +343,7 @@ async function main() {
     ];
 
     for (const reqItem of ensuredScopedItems) {
+      const sortOrder = getCanonicalSortOrder(reqItem.scope, reqItem.subCategory, reqItem.itemName);
       await prisma.workItem.upsert({
         where: {
           clusterId_scope_itemName: {
@@ -322,7 +352,7 @@ async function main() {
             itemName: reqItem.itemName,
           },
         },
-        update: {},
+        update: { sortOrder },
         create: {
           clusterId: cluster.id,
           scope: reqItem.scope,
@@ -334,7 +364,7 @@ async function main() {
           unit: reqItem.unit,
           boq: 0,
           status: 'ONGOING',
-          sortOrder: reqItem.sortOrder,
+          sortOrder,
         },
       });
     }
