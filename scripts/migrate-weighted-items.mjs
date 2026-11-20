@@ -15,6 +15,8 @@ try {
   console.warn('Could not read sitelist.json:', e.message);
 }
 
+const SUBFEEDER_ONLY_CABLES = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
+
 async function main() {
   console.log('--- Starting Weighted Items & Sitelist Metadata Migration ---');
 
@@ -32,7 +34,11 @@ async function main() {
   
   const clusters = await prisma.cluster.findMany({
     include: {
-      workItems: true,
+      workItems: {
+        include: {
+          progressList: { select: { id: true } },
+        },
+      },
     },
   });
 
@@ -74,13 +80,29 @@ async function main() {
       });
     }
 
-    // 1. Update existing items
+    // 1. Update existing items (and enforce Kabel 96c/144c/288c belong ONLY in SUBFEEDER)
     for (const item of cluster.workItems) {
       const name = item.itemName.toLowerCase();
+      const trimmedLower = name.trim();
       const cat = (item.category || '').toUpperCase();
       let scope = item.scope || 'CLUSTER';
-      if (name.includes('feeder') || name.includes('sf-')) {
+      if (name.includes('feeder') || name.includes('sf-') || SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
         scope = 'SUBFEEDER';
+      }
+
+      if (item.scope === 'CLUSTER' && SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
+        const hasSfSibling = cluster.workItems.some(
+          (other) =>
+            other.id !== item.id &&
+            other.scope === 'SUBFEEDER' &&
+            other.itemName.trim().toLowerCase() === trimmedLower
+        );
+        if (hasSfSibling || (item.boq === 0 && item.progressList.length === 0)) {
+          if (item.progressList.length === 0) {
+            await prisma.workItem.delete({ where: { id: item.id } });
+            continue;
+          }
+        }
       }
 
       let workType = 'CW';
@@ -143,9 +165,10 @@ async function main() {
       });
     }
 
-    // 2. Ensure new/revised BOQ items from BOQ-list.xlsx exist on cluster
-    const ensuredClusterItems = [
+    // 2. Ensure new/revised BOQ items from BOQ-list.xlsx exist in their respective scope
+    const ensuredScopedItems = [
       {
+        scope: 'CLUSTER',
         workType: 'CW',
         category: 'POLE',
         subCategory: 'POLE',
@@ -155,54 +178,71 @@ async function main() {
         sortOrder: 4,
       },
       {
-        workType: 'CW',
-        category: 'CABLE',
-        subCategory: 'CABLE',
-        weight: 20,
-        itemName: 'Kabel 288c',
-        unit: 'Meter',
-        sortOrder: 10,
-      },
-      {
+        scope: 'CLUSTER',
         workType: 'CW',
         category: 'SELING',
         subCategory: 'ACC',
         weight: 10,
         itemName: 'Seling',
         unit: 'Meter',
-        sortOrder: 14,
+        sortOrder: 11,
+      },
+      {
+        scope: 'SUBFEEDER',
+        workType: 'CW',
+        category: 'CABLE',
+        subCategory: 'CABLE',
+        weight: 20,
+        itemName: 'Kabel 96c',
+        unit: 'Meter',
+        sortOrder: 102,
+      },
+      {
+        scope: 'SUBFEEDER',
+        workType: 'CW',
+        category: 'CABLE',
+        subCategory: 'CABLE',
+        weight: 20,
+        itemName: 'Kabel 144c',
+        unit: 'Meter',
+        sortOrder: 103,
+      },
+      {
+        scope: 'SUBFEEDER',
+        workType: 'CW',
+        category: 'CABLE',
+        subCategory: 'CABLE',
+        weight: 20,
+        itemName: 'Kabel 288c',
+        unit: 'Meter',
+        sortOrder: 104,
       },
     ];
 
-    for (const reqItem of ensuredClusterItems) {
-      const exists = cluster.workItems.some(
-        (wi) => wi.scope === 'CLUSTER' && wi.itemName.trim().toLowerCase() === reqItem.itemName.toLowerCase()
-      );
-      if (!exists) {
-        await prisma.workItem.upsert({
-          where: {
-            clusterId_scope_itemName: {
-              clusterId: cluster.id,
-              scope: 'CLUSTER',
-              itemName: reqItem.itemName,
-            },
-          },
-          update: {},
-          create: {
+    for (const reqItem of ensuredScopedItems) {
+      await prisma.workItem.upsert({
+        where: {
+          clusterId_scope_itemName: {
             clusterId: cluster.id,
-            scope: 'CLUSTER',
-            workType: reqItem.workType,
-            category: reqItem.category,
-            subCategory: reqItem.subCategory,
-            weight: reqItem.weight,
+            scope: reqItem.scope,
             itemName: reqItem.itemName,
-            unit: reqItem.unit,
-            boq: 0,
-            status: 'ONGOING',
-            sortOrder: reqItem.sortOrder,
           },
-        });
-      }
+        },
+        update: {},
+        create: {
+          clusterId: cluster.id,
+          scope: reqItem.scope,
+          workType: reqItem.workType,
+          category: reqItem.category,
+          subCategory: reqItem.subCategory,
+          weight: reqItem.weight,
+          itemName: reqItem.itemName,
+          unit: reqItem.unit,
+          boq: 0,
+          status: 'ONGOING',
+          sortOrder: reqItem.sortOrder,
+        },
+      });
     }
   }
 

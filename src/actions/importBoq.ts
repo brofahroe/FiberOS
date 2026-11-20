@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import boqListFallback from '@/data/boq-list.json';
 import sitelistData from '@/data/sitelist.json';
+import { isSubfeederOnlyBoqItem } from '@/lib/progressCalculator';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
 
 export interface BoqReferenceRule {
@@ -474,7 +475,11 @@ export async function commitBoqImport(data: {
     const allAggregated = Array.from(aggregatedMap.values());
     const nonZeroAggregated = allAggregated.filter((i) => i.quantity > 0);
     const itemsToSave = nonZeroAggregated.length > 0 ? nonZeroAggregated : allAggregated;
-    const savedNamesSet = new Set(itemsToSave.map((i) => i.boqName.toLowerCase()));
+    const savedNamesForCurrentScope = new Set(
+      itemsToSave
+        .filter((i) => (isSubfeederOnlyBoqItem(i.boqName) ? 'SUBFEEDER' : scope) === scope)
+        .map((i) => i.boqName.toLowerCase())
+    );
 
     // Remove legacy/unmapped or 0-progress placeholder items in this cluster+scope that are not in the new BOQ import
     const existingWorkItems = await prisma.workItem.findMany({
@@ -488,23 +493,29 @@ export async function commitBoqImport(data: {
     });
 
     for (const oldItem of existingWorkItems) {
+      const oldLower = oldItem.itemName.trim().toLowerCase();
+      const shouldNotExistInCluster = scope === 'CLUSTER' && isSubfeederOnlyBoqItem(oldItem.itemName);
       if (
-        !savedNamesSet.has(oldItem.itemName.trim().toLowerCase()) &&
+        (!savedNamesForCurrentScope.has(oldLower) || shouldNotExistInCluster) &&
         oldItem.progressList.length === 0
       ) {
         await prisma.workItem.delete({ where: { id: oldItem.id } });
       }
     }
 
-    let sortOrder = scope === 'SUBFEEDER' ? 100 : 1;
+    let clrSortOrder = 1;
+    let sfSortOrder = 100;
     for (const it of itemsToSave) {
-      const { workType, subCategory, weight } = getWorkItemWeightAndType(it.category, scope);
+      const targetScope: 'CLUSTER' | 'SUBFEEDER' = isSubfeederOnlyBoqItem(it.boqName)
+        ? 'SUBFEEDER'
+        : scope;
+      const { workType, subCategory, weight } = getWorkItemWeightAndType(it.category, targetScope);
 
       await prisma.workItem.upsert({
         where: {
           clusterId_scope_itemName: {
             clusterId: cluster.id,
-            scope,
+            scope: targetScope,
             itemName: it.boqName,
           },
         },
@@ -518,7 +529,7 @@ export async function commitBoqImport(data: {
         },
         create: {
           clusterId: cluster.id,
-          scope,
+          scope: targetScope,
           workType,
           category: it.category,
           subCategory,
@@ -526,7 +537,7 @@ export async function commitBoqImport(data: {
           itemName: it.boqName,
           unit: it.unit,
           boq: it.quantity,
-          sortOrder: sortOrder++,
+          sortOrder: targetScope === 'SUBFEEDER' ? sfSortOrder++ : clrSortOrder++,
         },
       });
     }

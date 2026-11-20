@@ -41,6 +41,12 @@ export interface ClusterProgressSummary {
   totalWeightedPercentage: number; // 0 - 100% (CLR * 0.7 + SF * 0.3)
 }
 
+const SUBFEEDER_ONLY_ITEM_NAMES = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
+
+export function isSubfeederOnlyBoqItem(itemName: string): boolean {
+  return SUBFEEDER_ONLY_ITEM_NAMES.has((itemName || '').trim().toLowerCase());
+}
+
 /**
  * Normalisasi subCategory dan workType jika belum diset di database
  */
@@ -51,6 +57,7 @@ export function normalizeItemClassification(item: WorkItemCalculationInput): {
 } {
   const scope: 'CLUSTER' | 'SUBFEEDER' =
     item.scope === 'SUBFEEDER' ||
+    isSubfeederOnlyBoqItem(item.itemName || '') ||
     (item.itemName && item.itemName.toLowerCase().includes('feeder')) ||
     (item.itemName && item.itemName.toLowerCase().includes('sf-'))
       ? 'SUBFEEDER'
@@ -278,16 +285,16 @@ export const DEFAULT_BOQ_WORK_ITEMS = [
   { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 24c', unit: 'Meter', sortOrder: 5 },
   { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 36c', unit: 'Meter', sortOrder: 6 },
   { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 7 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 8 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 9 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 10 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Pcs', sortOrder: 11 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Pcs', sortOrder: 12 },
-  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Pcs', sortOrder: 13 },
-  { scope: 'CLUSTER', workType: 'CW', category: 'SELING', subCategory: 'ACC', weight: 10, itemName: 'Seling', unit: 'Meter', sortOrder: 14 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FAT', subCategory: 'FAT', weight: 25, itemName: 'FAT', unit: 'Pcs', sortOrder: 8 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT48', unit: 'Pcs', sortOrder: 9 },
+  { scope: 'CLUSTER', workType: 'EL', category: 'FDT', subCategory: 'FDT', weight: 5, itemName: 'FDT72', unit: 'Pcs', sortOrder: 10 },
+  { scope: 'CLUSTER', workType: 'CW', category: 'SELING', subCategory: 'ACC', weight: 10, itemName: 'Seling', unit: 'Meter', sortOrder: 11 },
   { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 100 },
   { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 101 },
-  { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 102 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 102 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 103 },
+  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 104 },
+  { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 105 },
 ] as const;
 
 
