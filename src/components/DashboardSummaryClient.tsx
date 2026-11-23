@@ -16,6 +16,49 @@ import {
   PlusCircle,
 } from 'lucide-react';
 
+function summarizeScopePoleCable(cluster: ClusterWithProgress) {
+  const sumBy = (
+    targetScope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER',
+    targetCategory: 'POLE' | 'CABLE'
+  ) => {
+    let boq = 0;
+    let installed = 0;
+    for (const it of cluster.workItems) {
+      const itemScope = it.scope || 'CLUSTER';
+      const matchesScope =
+        targetScope === 'MAIN_FEEDER'
+          ? itemScope === 'MAIN_FEEDER' || itemScope === 'SUBFEEDER'
+          : itemScope === targetScope;
+      if (!matchesScope) continue;
+
+      const cat = (it.category || '').toUpperCase();
+      const sub = (it.subCategory || '').toUpperCase();
+      const matchesCategory = cat === targetCategory || sub === targetCategory;
+      if (!matchesCategory) continue;
+
+      boq += it.boq;
+      installed += it.status === 'DONE' ? Math.max(it.installed, it.boq) : it.installed;
+    }
+    return {
+      boq: Math.round(boq * 10) / 10,
+      installed: Math.round(installed * 10) / 10,
+    };
+  };
+
+  return {
+    clrPole: sumBy('CLUSTER', 'POLE'),
+    clrCable: sumBy('CLUSTER', 'CABLE'),
+    sfPole: sumBy('SUBFEEDER', 'POLE'),
+    sfCable: sumBy('SUBFEEDER', 'CABLE'),
+    mfPole: sumBy('MAIN_FEEDER', 'POLE'),
+    mfCable: sumBy('MAIN_FEEDER', 'CABLE'),
+  };
+}
+
+function formatCardStat(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
 export default function DashboardSummaryClient({
   project,
   clusters,
@@ -490,17 +533,70 @@ export default function DashboardSummaryClient({
                   )}
                 </div>
 
-                {/* Key items quick stats */}
-                <div className="mt-3 pt-3 border-t border-slate-100 text-xs grid grid-cols-2 gap-y-1.5 text-slate-600">
-                  {cluster.workItems.slice(0, 4).map((item) => (
-                    <div key={item.id} className="flex justify-between pr-2 truncate">
-                      <span className="truncate pr-1 text-slate-500">{item.itemName}:</span>
-                      <span className="font-medium text-slate-800 shrink-0">
-                        {item.installed} / {item.boq}
-                      </span>
+                {/* Scope Pole & Cable quick stats: Left = Cluster, Right = Subfeeder (or Main Feeder) */}
+                {(() => {
+                  const summary = summarizeScopePoleCable(cluster);
+                  if (cluster.projectType === 'MAIN_FEEDER') {
+                    return (
+                      <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] sm:text-xs grid grid-cols-2 gap-x-3 gap-y-1.5 text-slate-600">
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <span className="truncate text-slate-500">Pole Feeder:</span>
+                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                            {formatCardStat(summary.mfPole.installed)} / {formatCardStat(summary.mfPole.boq)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <span className="truncate text-slate-500">Kabel Feeder:</span>
+                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                            {formatCardStat(summary.mfCable.installed)} / {formatCardStat(summary.mfCable.boq)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] sm:text-xs grid grid-cols-2 gap-x-3 text-slate-600">
+                      <div className="space-y-1.5 pr-2 border-r border-slate-100 min-w-0">
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <span className="truncate text-slate-500" title="Total Pole Cluster">
+                            Pole Cluster:
+                          </span>
+                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                            {formatCardStat(summary.clrPole.installed)} / {formatCardStat(summary.clrPole.boq)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <span className="truncate text-slate-500" title="Total Kabel Cluster (m)">
+                            Kabel Cluster:
+                          </span>
+                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                            {formatCardStat(summary.clrCable.installed)} / {formatCardStat(summary.clrCable.boq)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <span className="truncate text-slate-500" title="Total Pole Subfeeder">
+                            Pole Subfeeder:
+                          </span>
+                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                            {formatCardStat(summary.sfPole.installed)} / {formatCardStat(summary.sfPole.boq)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          <span className="truncate text-slate-500" title="Total Kabel Subfeeder (m)">
+                            Kabel Subfeeder:
+                          </span>
+                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                            {formatCardStat(summary.sfCable.installed)} / {formatCardStat(summary.sfCable.boq)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 <div className="mt-4 pt-2 flex items-center justify-between">
                   <Link
