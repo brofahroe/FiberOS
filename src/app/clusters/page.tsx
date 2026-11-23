@@ -87,15 +87,17 @@ export default async function ClustersPage() {
           return (
             <div key={cluster.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-sm">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="p-2.5 bg-blue-600 text-white rounded-xl shadow-sm shrink-0">
                     <Building2 className="w-5 h-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-base font-bold text-slate-900">{cluster.name}</h2>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 min-w-0 break-all leading-snug">
+                        {cluster.name}
+                      </h2>
                       {isMainFeeder && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
                           MAIN FEEDER (100%)
                         </span>
                       )}

@@ -413,24 +413,31 @@ export default function DashboardSummaryClient({
             {filteredClusters.map((cluster) => (
               <div
                 key={cluster.id}
-                className="border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition bg-white"
+                className="min-w-0 overflow-hidden border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition bg-white"
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <h3 className="font-bold text-slate-900 text-base">{cluster.name}</h3>
+                <div className="flex items-start justify-between gap-2 mb-2 min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      <h3
+                        className={`font-bold text-slate-900 min-w-0 max-w-full break-all leading-snug ${
+                          cluster.name.length > 24 ? 'text-sm' : 'text-base'
+                        }`}
+                        title={cluster.name}
+                      >
+                        {cluster.name}
+                      </h3>
                       {cluster.projectType === 'MAIN_FEEDER' && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
                           Main Feeder (100%)
                         </span>
                       )}
                       {cluster.kecamatan && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 shrink-0">
                           Kec. {cluster.kecamatan}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
                       Home Passes:{' '}
                       <span className="font-semibold text-slate-700">
                         {cluster.homePasses || '-'}
@@ -439,7 +446,7 @@ export default function DashboardSummaryClient({
                     </p>
                   </div>
                   <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                    className={`px-2.5 py-1 rounded-full text-xs font-extrabold shrink-0 whitespace-nowrap ${
                       cluster.percentage >= 100
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         : cluster.percentage > 0
