@@ -200,22 +200,29 @@ html.dark .table-scrollbar::-webkit-scrollbar-thumb:hover {
 :where(html.dark) .bg-slate-50 {
   background-color: #1e293b;
 }
+:where(html.dark) .bg-slate-50\/40,
 :where(html.dark) .bg-slate-50\/50,
+:where(html.dark) .bg-slate-50\/60,
 :where(html.dark) .bg-slate-50\/70,
 :where(html.dark) .bg-slate-50\/80 {
-  background-color: rgba(30, 41, 59, 0.65);
+  background-color: rgba(30, 41, 59, 0.58);
 }
 :where(html.dark) .bg-slate-100 {
   background-color: #1e293b;
 }
+:where(html.dark) .bg-slate-100\/40,
 :where(html.dark) .bg-slate-100\/70,
-:where(html.dark) .bg-slate-100\/80 {
+:where(html.dark) .bg-slate-100\/80,
+:where(html.dark) .bg-slate-100\/90 {
   background-color: rgba(30, 41, 59, 0.85);
 }
 :where(html.dark) .bg-slate-200 {
   background-color: #334155;
 }
-:where(html.dark) .bg-slate-200\/70 {
+:where(html.dark) .bg-slate-200\/50,
+:where(html.dark) .bg-slate-200\/60,
+:where(html.dark) .bg-slate-200\/70,
+:where(html.dark) .bg-slate-200\/80 {
   background-color: rgba(51, 65, 85, 0.7);
 }
 
@@ -248,13 +255,13 @@ html.dark .table-scrollbar::-webkit-scrollbar-thumb:hover {
   color: #cbd5e1;
 }
 :where(html.dark) .text-slate-600 {
-  color: #94a3b8;
+  color: #cbd5e1;
 }
 :where(html.dark) .text-slate-500 {
   color: #94a3b8;
 }
 :where(html.dark) .text-slate-400 {
-  color: #64748b;
+  color: #94a3b8;
 }
 :where(html.dark) .text-slate-300 {
   color: #cbd5e1;
@@ -289,12 +296,16 @@ html.dark .table-scrollbar::-webkit-scrollbar-thumb:hover {
 
 /* Blue tinted badges, alerts, buttons */
 :where(html.dark) .bg-blue-50,
+:where(html.dark) .bg-blue-50\/30,
+:where(html.dark) .bg-blue-50\/40,
 :where(html.dark) .bg-blue-50\/50,
 :where(html.dark) .bg-blue-50\/70,
 :where(html.dark) .bg-blue-50\/80 {
   background-color: rgba(37, 99, 235, 0.16);
 }
-:where(html.dark) .bg-blue-100 {
+:where(html.dark) .bg-blue-100,
+:where(html.dark) .bg-blue-100\/70,
+:where(html.dark) .bg-blue-100\/80 {
   background-color: rgba(37, 99, 235, 0.25);
 }
 :where(html.dark) .border-blue-100,
@@ -374,6 +385,7 @@ html.dark .table-scrollbar::-webkit-scrollbar-thumb:hover {
 
 /* Amber tinted badges & alerts */
 :where(html.dark) .bg-amber-50,
+:where(html.dark) .bg-amber-50\/80,
 :where(html.dark) .bg-amber-100 {
   background-color: rgba(245, 158, 11, 0.16);
 }
