@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   parseBoqExcel,
   parseSampleBoqFile,
   commitBoqImport,
+  checkBoqTargetCluster,
   type BoqImportScope,
+  type BoqTargetCheckResult,
   ParsedBoqResult,
   ParsedBoqItem,
 } from '@/actions/importBoq';
@@ -16,6 +18,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   Check,
   FileText,
@@ -35,12 +38,41 @@ export default function ImportBoqClient() {
   const [homePasses, setHomePasses] = useState<string>('0');
   const [showAllRefItems, setShowAllRefItems] = useState<boolean>(false);
   const [showRefGuide, setShowRefGuide] = useState<boolean>(false);
+  const [uploadedFilename, setUploadedFilename] = useState<string>('');
+  const [targetCheck, setTargetCheck] = useState<BoqTargetCheckResult | null>(null);
+  const [checkingTarget, setCheckingTarget] = useState<boolean>(false);
+  const [confirmOverwrite, setConfirmOverwrite] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    const trimmed = clusterName.trim();
+    if (!result || !trimmed) {
+      setTargetCheck(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingTarget(true);
+    const timer = setTimeout(async () => {
+      const check = await checkBoqTargetCluster(trimmed, scope);
+      if (!cancelled) {
+        setTargetCheck(check);
+        setCheckingTarget(false);
+        setConfirmOverwrite(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [result, clusterName, scope]);
 
   const applyParsedResult = (data: ParsedBoqResult) => {
     setResult(data);
     setClusterName(data.clusterName);
     setScope(data.scope || 'CLUSTER');
+    setConfirmOverwrite(false);
     if (data.homePasses && data.homePasses > 0) {
       setHomePasses(String(data.homePasses));
     }
@@ -66,6 +98,7 @@ export default function ImportBoqClient() {
     setParsing(true);
     setMessage(null);
     setResult(null);
+    setUploadedFilename(file.name);
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -91,6 +124,7 @@ export default function ImportBoqClient() {
     setParsing(true);
     setMessage(null);
     setResult(null);
+    setUploadedFilename(filename);
 
     const res = await parseSampleBoqFile(filename, preferredScope);
     setParsing(false);
@@ -128,10 +162,45 @@ export default function ImportBoqClient() {
       : activeSheetData.items
     : [];
 
+  const hasOverwriteRisk = Boolean(
+    targetCheck?.exists &&
+      ((targetCheck.itemCountInScope || 0) > 0 ||
+        scope === 'MAIN_FEEDER' ||
+        targetCheck.projectType === 'MAIN_FEEDER')
+  );
+
   const handleCommit = async () => {
     if (!activeSheetData || !clusterName.trim()) {
       setMessage({ type: 'error', text: 'Nama cluster harus diisi.' });
       return;
+    }
+
+    const latestCheck = await checkBoqTargetCluster(clusterName.trim(), scope);
+    setTargetCheck(latestCheck);
+
+    const needsConfirmation = Boolean(
+      latestCheck.exists &&
+        ((latestCheck.itemCountInScope || 0) > 0 ||
+          scope === 'MAIN_FEEDER' ||
+          latestCheck.projectType === 'MAIN_FEEDER')
+    );
+
+    let agreedOverwrite = false;
+    if (needsConfirmation && !confirmOverwrite) {
+      agreedOverwrite = confirm(
+        `PERINGATAN: Target "${latestCheck.clusterName}" (${latestCheck.code || '-'}) SUDAH ADA di database!\n` +
+          `Data saat ini: ${latestCheck.existingSummary || '-'}\n\n` +
+          `Jika dilanjutkan, BOQ yang lama pada scope ${scope} akan TERTIMPA oleh file "${uploadedFilename || 'ini'}".\n\n` +
+          `• Klik OK untuk MENIMPA data yang sudah ada.\n` +
+          `• Klik Cancel jika ini link/cluster berbeda, lalu ubah "Nama Cluster Target" terlebih dahulu.`
+      );
+      if (!agreedOverwrite) {
+        setMessage({
+          type: 'error',
+          text: `Penyimpanan dibatalkan agar tidak menimpa "${latestCheck.clusterName}". Ubah Nama Pekerjaan/Cluster Target jika ini data baru.`,
+        });
+        return;
+      }
     }
 
     setCommitting(true);
@@ -142,6 +211,10 @@ export default function ImportBoqClient() {
       scope,
       homePasses: parseInt(homePasses) || 0,
       items: activeSheetData.items,
+      conflictMode:
+        !latestCheck.exists || !needsConfirmation || confirmOverwrite || agreedOverwrite
+          ? 'OVERWRITE'
+          : 'CREATE_NEW_ONLY',
     });
 
     setCommitting(false);
@@ -345,6 +418,11 @@ export default function ImportBoqClient() {
               <h2 className="text-lg font-bold text-slate-900">
                 Preview Data BOQ Terdeteksi ({displayedItems.length} item dari {activeSheetData.sheetName})
               </h2>
+              {uploadedFilename && (
+                <p className="text-xs text-slate-500 mt-0.5">
+                  File sumber: <strong className="text-slate-700">{uploadedFilename}</strong>
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -429,6 +507,64 @@ export default function ImportBoqClient() {
               />
             </div>
           </div>
+
+          {/* Duplicate / Overwrite Warning Banner */}
+          {checkingTarget ? (
+            <div className="flex items-center gap-2 text-xs text-slate-500 px-1">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
+              <span>Memeriksa apakah nama target sudah ada di database...</span>
+            </div>
+          ) : targetCheck?.exists ? (
+            <div
+              className={`p-4 rounded-xl border text-xs space-y-2 ${
+                hasOverwriteRisk
+                  ? 'bg-amber-50 border-amber-300 text-amber-900'
+                  : 'bg-blue-50 border-blue-200 text-blue-900'
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle
+                  className={`w-4 h-4 shrink-0 mt-0.5 ${
+                    hasOverwriteRisk ? 'text-amber-600' : 'text-blue-600'
+                  }`}
+                />
+                <div className="space-y-1">
+                  <p className="font-bold">
+                    {hasOverwriteRisk
+                      ? `Peringatan Cegah Timpa: Target "${targetCheck.clusterName}" (${targetCheck.code || '-'}) sudah terdaftar!`
+                      : `Info Target: "${targetCheck.clusterName}" (${targetCheck.code || '-'}) sudah ada di database.`}
+                  </p>
+                  <p>
+                    Data tersimpan saat ini ({targetCheck.projectType === 'MAIN_FEEDER' ? 'Main Feeder' : 'Cluster + SF'}):{' '}
+                    <strong>{targetCheck.existingSummary}</strong>.
+                  </p>
+                  {hasOverwriteRisk ? (
+                    <p>
+                      Jika file ini adalah segmen/link berbeda, <strong>ubah kolom Nama di atas</strong> supaya data lama tidak tertimpa.
+                    </p>
+                  ) : (
+                    <p>
+                      Scope <strong>{scope}</strong> belum memiliki data BOQ di cluster ini, jadi penyimpanan ini akan melengkapi cluster yang sudah ada.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {hasOverwriteRisk && (
+                <label className="flex items-center gap-2 pt-1 font-semibold cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={confirmOverwrite}
+                    onChange={(e) => setConfirmOverwrite(e.target.checked)}
+                    className="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span>
+                    Ya, saya memang ingin memperbarui / menimpa BOQ yang ada di &quot;{targetCheck.clusterName}&quot;
+                  </span>
+                </label>
+              )}
+            </div>
+          ) : null}
 
           {/* Table Preview matching BOQ-list.xlsx */}
           <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[460px] overflow-y-auto">

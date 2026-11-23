@@ -408,11 +408,87 @@ function getWorkItemWeightAndType(category: string, scope: BoqImportScope) {
   return { workType: 'CW', subCategory: 'ACC', weight: 10 };
 }
 
+export interface BoqTargetCheckResult {
+  exists: boolean;
+  clusterId?: string;
+  clusterName?: string;
+  code?: string | null;
+  projectType?: string;
+  itemCountInScope?: number;
+  totalItemsCount?: number;
+  existingSummary?: string;
+}
+
+export async function checkBoqTargetCluster(
+  rawClusterName: string,
+  scope: BoqImportScope
+): Promise<BoqTargetCheckResult> {
+  try {
+    const trimmed = (rawClusterName || '').trim();
+    if (!trimmed) return { exists: false };
+
+    const project =
+      (await prisma.project.findFirst({ where: { code: 'BLA-KEDUNGTUBAN' } })) ||
+      (await prisma.project.findFirst());
+    if (!project) return { exists: false };
+
+    const isMainFeeder = scope === 'MAIN_FEEDER';
+    const cleanedName = isMainFeeder ? trimmed.toUpperCase() : cleanClusterName(trimmed);
+
+    const existing = await prisma.cluster.findFirst({
+      where: {
+        projectId: project.id,
+        OR: [{ name: cleanedName }, { name: trimmed }, { name: trimmed.toUpperCase() }],
+      },
+      include: {
+        workItems: {
+          select: {
+            itemName: true,
+            scope: true,
+            boq: true,
+          },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    if (!existing) {
+      return { exists: false };
+    }
+
+    const itemsInScope = existing.workItems.filter((w) =>
+      isMainFeeder ? w.scope === 'MAIN_FEEDER' : w.scope === scope
+    );
+    const activeInScope = itemsInScope.filter((w) => w.boq > 0);
+    const previewSource = activeInScope.length > 0 ? activeInScope : existing.workItems;
+    const existingSummary = previewSource
+      .slice(0, 4)
+      .map((w) => `${w.itemName}: ${w.boq.toLocaleString('en-US')}`)
+      .join(', ');
+
+    return {
+      exists: true,
+      clusterId: existing.id,
+      clusterName: existing.name,
+      code: existing.code,
+      projectType: existing.projectType,
+      itemCountInScope: activeInScope.length > 0 ? activeInScope.length : itemsInScope.length,
+      totalItemsCount: existing.workItems.length,
+      existingSummary:
+        existingSummary || `${existing.workItems.length} item (BOQ 0)`,
+    };
+  } catch (err) {
+    console.warn('Error checking BOQ target cluster:', err);
+    return { exists: false };
+  }
+}
+
 export async function commitBoqImport(data: {
   clusterName: string;
   scope?: BoqImportScope;
   homePasses?: number;
   items: ParsedBoqItem[];
+  conflictMode?: 'OVERWRITE' | 'CREATE_NEW_ONLY';
 }) {
   try {
     await ensureDatabaseRestoredFromNextcloud();
@@ -448,9 +524,16 @@ export async function commitBoqImport(data: {
     let cluster = await prisma.cluster.findFirst({
       where: {
         projectId: project.id,
-        OR: [{ name: cleanedName }, { name: data.clusterName.trim() }],
+        OR: [{ name: cleanedName }, { name: data.clusterName.trim() }, { name: data.clusterName.trim().toUpperCase() }],
       },
     });
+
+    if (cluster && data.conflictMode === 'CREATE_NEW_ONLY') {
+      return {
+        success: false,
+        error: `Data dengan nama "${cluster.name}" (${cluster.code || '-'}) sudah ada di database. Ubah "Nama Cluster Target" agar tidak menimpa data yang sudah ada, atau centang konfirmasi timpa BOQ.`,
+      };
+    }
 
     if (!cluster) {
       cluster = await prisma.cluster.create({
