@@ -1,6 +1,8 @@
+export type ProjectType = 'CLUSTER_SF' | 'MAIN_FEEDER';
+
 export interface WorkItemCalculationInput {
   id: string;
-  scope?: string | null;      // 'CLUSTER' | 'SUBFEEDER'
+  scope?: string | null;      // 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER'
   workType?: string | null;   // 'CW' | 'EL'
   category?: string | null;   // 'POLE', 'CABLE', 'FAT', 'FDT', 'ACCESSORY', 'JC', 'OTHER'
   subCategory?: string | null;// 'POLE', 'CABLE', 'ACC', 'FAT', 'FDT', 'JC'
@@ -23,9 +25,9 @@ export interface SubCategoryProgress {
 }
 
 export interface ScopeProgressBreakdown {
-  scope: 'CLUSTER' | 'SUBFEEDER';
+  scope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER';
   label: string;
-  overallWeight: number;    // 70 untuk CLR, 30 untuk SF
+  overallWeight: number;    // 70 untuk CLR, 30 untuk SF, 100 untuk MAIN_FEEDER
   cwPercentage: number;     // 0 - 100%
   elPercentage: number;     // 0 - 100%
   scopePercentage: number;  // 0 - 100%
@@ -36,9 +38,10 @@ export interface ScopeProgressBreakdown {
 export interface ClusterProgressSummary {
   clusterId?: string;
   clusterName?: string;
+  projectType: ProjectType;
   clr: ScopeProgressBreakdown;
   sf: ScopeProgressBreakdown;
-  totalWeightedPercentage: number; // 0 - 100% (CLR * 0.7 + SF * 0.3)
+  totalWeightedPercentage: number; // 0 - 100% (CLR * 0.7 + SF * 0.3, or 100% MF)
 }
 
 const SUBFEEDER_ONLY_ITEM_NAMES = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
@@ -51,15 +54,17 @@ export function isSubfeederOnlyBoqItem(itemName: string): boolean {
  * Normalisasi subCategory dan workType jika belum diset di database
  */
 export function normalizeItemClassification(item: WorkItemCalculationInput): {
-  scope: 'CLUSTER' | 'SUBFEEDER';
+  scope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER';
   workType: 'CW' | 'EL';
   subCategory: 'POLE' | 'CABLE' | 'ACC' | 'FAT' | 'FDT' | 'JC' | 'OTHER';
 } {
-  const scope: 'CLUSTER' | 'SUBFEEDER' =
-    item.scope === 'SUBFEEDER' ||
-    isSubfeederOnlyBoqItem(item.itemName || '') ||
-    (item.itemName && item.itemName.toLowerCase().includes('feeder')) ||
-    (item.itemName && item.itemName.toLowerCase().includes('sf-'))
+  const scope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER' =
+    item.scope === 'MAIN_FEEDER'
+      ? 'MAIN_FEEDER'
+      : item.scope === 'SUBFEEDER' ||
+        isSubfeederOnlyBoqItem(item.itemName || '') ||
+        (item.itemName && item.itemName.toLowerCase().includes('feeder')) ||
+        (item.itemName && item.itemName.toLowerCase().includes('sf-'))
       ? 'SUBFEEDER'
       : 'CLUSTER';
 
@@ -110,7 +115,14 @@ export function normalizeItemClassification(item: WorkItemCalculationInput): {
  *   CW (80%): Pole 50%, Cable 20%, Acc 10%
  *   EL (20%): JC 20%
  */
-export function calculateClusterProgress(items: WorkItemCalculationInput[]): ClusterProgressSummary {
+export function calculateClusterProgress(
+  items: WorkItemCalculationInput[],
+  options?: { projectType?: string | null }
+): ClusterProgressSummary {
+  const isMainFeeder =
+    options?.projectType === 'MAIN_FEEDER' ||
+    (items.length > 0 && items.every((it) => it.scope === 'MAIN_FEEDER'));
+
   // Pengelompokan item
   const clrItems: Record<string, WorkItemCalculationInput[]> = {
     POLE: [],
@@ -129,7 +141,7 @@ export function calculateClusterProgress(items: WorkItemCalculationInput[]): Clu
 
   for (const item of items) {
     const { scope, subCategory } = normalizeItemClassification(item);
-    if (scope === 'SUBFEEDER') {
+    if (isMainFeeder || scope === 'MAIN_FEEDER' || scope === 'SUBFEEDER') {
       if (sfItems[subCategory]) {
         sfItems[subCategory].push(item);
       }
@@ -235,10 +247,68 @@ export function calculateClusterProgress(items: WorkItemCalculationInput[]): Clu
   const sfCwPercentage = Math.min(100, Math.round((sfCwContribution / 80) * 100));
   const sfElPercentage = Math.min(100, Math.round((sfElContribution / 20) * 100));
 
-  // Total bobot tertimbang (CLR 70% + SF 30%)
+  // Total bobot tertimbang: Main Feeder = 100% Feeder tanpa Cluster; Standar = CLR 70% + SF 30%
+  if (isMainFeeder) {
+    const mfCategories = [sfPole, sfCable, sfAcc, sfJc];
+    const activeMfCats = mfCategories.filter((c) => c.itemCount > 0);
+    const totalApplicableWeight = activeMfCats.reduce((sum, c) => sum + c.weight, 0);
+    const weightedPctSum = activeMfCats.reduce((sum, c) => sum + c.percentage * c.weight, 0);
+    const mfScopePercentage =
+      totalApplicableWeight > 0
+        ? Math.min(100, Math.round(weightedPctSum / totalApplicableWeight))
+        : 0;
+
+    const mfCwCats = [sfPole, sfCable, sfAcc].filter((c) => c.itemCount > 0);
+    const mfCwWeight = mfCwCats.reduce((sum, c) => sum + c.weight, 0);
+    const mfCwPct =
+      mfCwWeight > 0
+        ? Math.min(
+            100,
+            Math.round(mfCwCats.reduce((sum, c) => sum + c.percentage * c.weight, 0) / mfCwWeight)
+          )
+        : 0;
+
+    return {
+      projectType: 'MAIN_FEEDER',
+      clr: {
+        scope: 'CLUSTER',
+        label: 'Cluster / Distribusi (Tidak Ada)',
+        overallWeight: 0,
+        cwPercentage: 0,
+        elPercentage: 0,
+        scopePercentage: 0,
+        totalContribution: 0,
+        subCategories: {
+          POLE: clrPole,
+          CABLE: clrCable,
+          ACC: clrAcc,
+          FAT: clrFat,
+          FDT: clrFdt,
+        },
+      },
+      sf: {
+        scope: 'MAIN_FEEDER',
+        label: 'Main Feeder (100%)',
+        overallWeight: 100,
+        cwPercentage: mfCwPct,
+        elPercentage: sfJc.percentage,
+        scopePercentage: mfScopePercentage,
+        totalContribution: mfScopePercentage,
+        subCategories: {
+          POLE: sfPole,
+          CABLE: sfCable,
+          ACC: sfAcc,
+          JC: sfJc,
+        },
+      },
+      totalWeightedPercentage: mfScopePercentage,
+    };
+  }
+
   const totalWeightedPercentage = Math.min(100, Math.round(clrTotalContribution + sfTotalContribution));
 
   return {
+    projectType: 'CLUSTER_SF',
     clr: {
       scope: 'CLUSTER',
       label: 'Cluster / Distribusi (70%)',
@@ -295,6 +365,16 @@ export const DEFAULT_BOQ_WORK_ITEMS = [
   { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 11144 },
   { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 11288 },
   { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 14001 },
+] as const;
+
+export const DEFAULT_MAIN_FEEDER_WORK_ITEMS = [
+  { scope: 'MAIN_FEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 20003 },
+  { scope: 'MAIN_FEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 9m "4"', unit: 'Btg', sortOrder: 20004 },
+  { scope: 'MAIN_FEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 21048 },
+  { scope: 'MAIN_FEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 21096 },
+  { scope: 'MAIN_FEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 21144 },
+  { scope: 'MAIN_FEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 21288 },
+  { scope: 'MAIN_FEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 24001 },
 ] as const;
 
 export interface WorkItemSortInput {
@@ -369,7 +449,11 @@ function getWithinCategoryRank(catRank: number, itemName: string): number {
  */
 export function getCanonicalWorkItemSortOrder(item: WorkItemSortInput): number {
   const scopeRank =
-    item.scope === 'SUBFEEDER' || isSubfeederOnlyBoqItem(item.itemName || '') ? 1 : 0;
+    item.scope === 'MAIN_FEEDER'
+      ? 2
+      : item.scope === 'SUBFEEDER' || isSubfeederOnlyBoqItem(item.itemName || '')
+      ? 1
+      : 0;
   const catRank = getCategoryOrderRank(item);
   const withinRank = getWithinCategoryRank(catRank, item.itemName);
   return scopeRank * 10000 + catRank * 1000 + withinRank;

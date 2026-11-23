@@ -245,7 +245,7 @@ export default function WhatsAppReportModal({
       ? subconLeader
       : itemData.reporterName || subconLeader;
 
-    return `*ZTE BLORA FTTH Project MoraRepublic*
+    const headerBlock = `*ZTE BLORA FTTH Project MoraRepublic*
 *${itemData.formattedDate}*
 Site Name: *${effectiveSiteName}*
 Site ID:  *${effectiveSiteId}*
@@ -257,7 +257,29 @@ Subcon teams Qty : ${teamQty}
 Subcon leader : ${effectiveLeader}
 Tanggal Start IM: ${startImDate}
  
-Format : ( SOW BOQ / TOTAL ACTUAL / PENCAPAIAN HARI INI ) : X/Y/Z
+Format : ( SOW BOQ / TOTAL ACTUAL / PENCAPAIAN HARI INI ) : X/Y/Z`;
+
+    if (itemData.isMainFeeder) {
+      return `${headerBlock}
+ 
+MAIN FEEDER (100% FEEDER)
+ 
+Install Pole : ${sfPoleLine}
+Pooling Cable : ${sfCableLine}
+JC : ${sfJcLine}
+ 
+PLAN ATP CIVIL WORK :
+${planAtpCw}
+PLAN ATP OPM TEST : ${planAtpOpm}
+ 
+Progress Today :
+ 
+Install pole MF: ${s.pole.today > 0 ? `${formatNumber(s.pole.today)} pole` : '- pole'}
+Pulling Cable MF: ${s.cable.today > 0 ? `${formatNumber(s.cable.today)} m` : '-'}
+Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
+    }
+
+    return `${headerBlock}
  
 DISTRIBUSI
  

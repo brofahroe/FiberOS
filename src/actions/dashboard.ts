@@ -110,7 +110,10 @@ export async function getDashboardData() {
       };
     });
 
-    const clusterCalc = calculateClusterProgress(calcInput);
+    const isMainFeeder = cluster.projectType === 'MAIN_FEEDER';
+    const clusterCalc = calculateClusterProgress(calcInput, {
+      projectType: cluster.projectType,
+    });
 
     const sortedWorkItems = sortWorkItems(cluster.workItems);
     const itemsSummary = sortedWorkItems.map((item) => {
@@ -178,6 +181,7 @@ export async function getDashboardData() {
       kecamatan: cluster.kecamatan || matchedSite?.kecamatan || 'Kedungtuban',
       kabupaten: cluster.kabupaten || matchedSite?.kabupaten || 'Blora',
       homePasses: cluster.homePasses,
+      projectType: isMainFeeder ? 'MAIN_FEEDER' : 'CLUSTER_SF',
       totalBoq: Math.round(clusterBoq * 10) / 10,
       totalInstalled: Math.round(clusterInstalled * 10) / 10,
       percentage: clusterCalc.totalWeightedPercentage,

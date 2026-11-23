@@ -72,7 +72,7 @@ export default function MatrixClient({
 }) {
   const [rows, setRows] = useState<MatrixRowItem[]>(matrixRows);
   const [selectedCluster, setSelectedCluster] = useState<string>(initialClusterId || 'ALL');
-  const [selectedScope, setSelectedScope] = useState<'ALL' | 'CLUSTER' | 'SUBFEEDER'>('ALL');
+  const [selectedScope, setSelectedScope] = useState<'ALL' | 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER'>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [exporting, setExporting] = useState<boolean>(false);
   const [rowStatuses, setRowStatuses] = useState<{ [id: string]: string }>({});
@@ -343,9 +343,10 @@ export default function MatrixClient({
             onChange={(e) => setSelectedScope(e.target.value as any)}
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="ALL">Semua Scope (CLR + SF)</option>
+            <option value="ALL">Semua Scope (CLR + SF + MF)</option>
             <option value="CLUSTER">🏙️ Cluster Saja (70%)</option>
             <option value="SUBFEEDER">📡 Subfeeder Saja (30%)</option>
+            <option value="MAIN_FEEDER">🛰️ Main Feeder Saja (100%)</option>
           </select>
         </div>
 
@@ -605,12 +606,14 @@ export default function MatrixClient({
                       <td className="p-2.5 text-center border-r border-slate-100 w-[96px] min-w-[96px] max-w-[96px] sticky left-[204px] bg-white group-hover:bg-slate-50 z-10">
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            row.scope === 'SUBFEEDER'
+                            row.scope === 'MAIN_FEEDER'
+                              ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                              : row.scope === 'SUBFEEDER'
                               ? 'bg-purple-100 text-purple-700 border border-purple-200'
                               : 'bg-blue-100 text-blue-700 border border-blue-200'
                           }`}
                         >
-                          {row.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
+                          {row.scope === 'MAIN_FEEDER' ? 'MF (100%)' : row.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
                         </span>
                       </td>
                       <td className="p-2.5 font-medium border-r border-slate-100 text-slate-800 w-[200px] min-w-[200px] max-w-[200px] sticky left-[300px] bg-white group-hover:bg-slate-50 z-10">

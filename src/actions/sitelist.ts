@@ -3,7 +3,11 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import sitelistData from '@/data/sitelist.json';
-import { calculateClusterProgress, DEFAULT_BOQ_WORK_ITEMS } from '@/lib/progressCalculator';
+import {
+  calculateClusterProgress,
+  DEFAULT_BOQ_WORK_ITEMS,
+  DEFAULT_MAIN_FEEDER_WORK_ITEMS,
+} from '@/lib/progressCalculator';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
 import {
   backupDatabaseToNextcloud,
@@ -26,6 +30,7 @@ export interface SitelistEntry {
   kabupaten: string;
   startImpleDate: string;
   homePasses: number;
+  projectType: 'CLUSTER_SF' | 'MAIN_FEEDER';
   percentage: number;
   clrPercentage: number;
   sfPercentage: number;
@@ -180,7 +185,9 @@ export async function getSitelistData() {
         };
       });
 
-      const calc = calculateClusterProgress(calcInput);
+      const calc = calculateClusterProgress(calcInput, {
+        projectType: cluster.projectType,
+      });
       const status: SitelistEntry['status'] =
         calc.totalWeightedPercentage >= 100
           ? 'COMPLETED'
@@ -189,6 +196,9 @@ export async function getSitelistData() {
           : 'NOT_STARTED';
 
       return {
+        projectType: (cluster.projectType === 'MAIN_FEEDER' ? 'MAIN_FEEDER' : 'CLUSTER_SF') as
+          | 'CLUSTER_SF'
+          | 'MAIN_FEEDER',
         percentage: calc.totalWeightedPercentage,
         clrPercentage: calc.clr.scopePercentage,
         sfPercentage: calc.sf.scopePercentage,
@@ -256,6 +266,7 @@ export async function getSitelistData() {
           kabupaten: site.kabupaten || 'Blora',
           startImpleDate: siteDefaultDate ? formatCanonicalReportDate(siteDefaultDate) : '',
           homePasses: 0,
+          projectType: 'CLUSTER_SF',
           percentage: 0,
           clrPercentage: 0,
           sfPercentage: 0,
@@ -391,6 +402,7 @@ export async function createOrActivateSitelistCluster(input: {
   kabupaten: string;
   startImpleDate?: string;
   homePasses?: number;
+  projectType?: 'CLUSTER_SF' | 'MAIN_FEEDER';
   isActive?: boolean;
 }) {
   try {
@@ -450,6 +462,8 @@ export async function createOrActivateSitelistCluster(input: {
       input.startImpleDate && input.startImpleDate.trim()
         ? formatCanonicalReportDate(input.startImpleDate.trim())
         : null;
+    const normalizedProjectType =
+      input.projectType === 'MAIN_FEEDER' ? 'MAIN_FEEDER' : 'CLUSTER_SF';
 
     if (existing) {
       // Update metadata if already exists
@@ -466,6 +480,7 @@ export async function createOrActivateSitelistCluster(input: {
           kabupaten: input.kabupaten.trim() || existing.kabupaten || 'Blora',
           startImpleDate: input.startImpleDate !== undefined ? formattedStartDate : existing.startImpleDate,
           homePasses: input.homePasses !== undefined ? input.homePasses : existing.homePasses,
+          projectType: input.projectType !== undefined ? normalizedProjectType : existing.projectType,
         },
       });
 
@@ -498,11 +513,17 @@ export async function createOrActivateSitelistCluster(input: {
         kabupaten: input.kabupaten.trim() || 'Blora',
         startImpleDate: formattedStartDate,
         homePasses: input.homePasses || 0,
+        projectType: normalizedProjectType,
       },
     });
 
-    // Create default weighted work items (Cluster 70% + Subfeeder 30%)
-    for (const wi of DEFAULT_WORK_ITEMS) {
+    const defaultItemsForNewCluster =
+      normalizedProjectType === 'MAIN_FEEDER'
+        ? DEFAULT_MAIN_FEEDER_WORK_ITEMS
+        : DEFAULT_WORK_ITEMS;
+
+    // Create default weighted work items
+    for (const wi of defaultItemsForNewCluster) {
       await prisma.workItem.create({
         data: {
           clusterId: created.id,

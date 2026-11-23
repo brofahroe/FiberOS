@@ -210,6 +210,7 @@ export async function getClusterItemsForForm(clusterId: string) {
       id: cluster.id,
       name: cluster.name,
       homePasses: cluster.homePasses,
+      projectType: cluster.projectType || 'CLUSTER_SF',
     },
     items,
   };

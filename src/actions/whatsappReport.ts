@@ -21,6 +21,7 @@ export interface WaReportData {
   startImDate: string;
   reporterName: string;
   teamName: string;
+  isMainFeeder?: boolean;
   availableClusters: Array<{ id: string; name: string; code?: string | null }>;
   availableDates: string[];
   clustersWithReportsOnDate: string[];
@@ -265,9 +266,11 @@ export async function getWhatsAppReportData(
       return { success: false, error: 'Cluster tidak ditemukan.' };
     }
 
+    const isMainFeeder = cluster.projectType === 'MAIN_FEEDER';
+
     // Helper to calculate metric for items matching filter
     const calcMetrics = (
-      scope: 'CLUSTER' | 'SUBFEEDER',
+      scope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER',
       categoryMatch: (name: string, cat: string, sub: string) => boolean
     ): WaReportItemMetrics => {
       let boq = 0;
@@ -278,7 +281,11 @@ export async function getWhatsAppReportData(
 
       for (const item of cluster.workItems) {
         const itemScope = item.scope || (item.itemName.toLowerCase().includes('feeder') ? 'SUBFEEDER' : 'CLUSTER');
-        if (itemScope !== scope) continue;
+        const effectiveMatchesScope =
+          scope === 'MAIN_FEEDER'
+            ? itemScope === 'MAIN_FEEDER' || itemScope === 'SUBFEEDER'
+            : itemScope === scope;
+        if (!effectiveMatchesScope) continue;
 
         const name = item.itemName.toLowerCase();
         const cat = (item.category || '').toUpperCase();
@@ -321,17 +328,30 @@ export async function getWhatsAppReportData(
       };
     };
 
-    // Distribusi items
-    const clrPole = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'POLE' || cat === 'POLE' || name.includes('pole') || name.includes('tiang'));
-    const clrCable = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
-    const clrFdt = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'FDT' || cat === 'FDT' || name.includes('fdt'));
-    const clrFat = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'FAT' || cat === 'FAT' || name.includes('fat'));
-    const clrWireSling = calcMetrics('CLUSTER', (name, cat, sub) => sub === 'ACC' || cat === 'ACCESSORY' || cat === 'SELING' || name.includes('seling') || name.includes('wire') || name.includes('sling') || name.includes('acc') || name.includes('perapihan'));
+    const emptyMetric: WaReportItemMetrics = { boq: 0, actual: 0, today: 0, isDone: false };
 
-    // Subfeeder items
-    const sfPole = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'POLE' || cat === 'POLE' || name.includes('pole') || name.includes('tiang'));
-    const sfCable = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
-    const sfJc = calcMetrics('SUBFEEDER', (name, cat, sub) => sub === 'JC' || cat === 'JC' || name.includes('jc') || name.includes('joint closure'));
+    // Distribusi items (kosong untuk Main Feeder karena tidak ada scope cluster)
+    const clrPole = isMainFeeder
+      ? emptyMetric
+      : calcMetrics('CLUSTER', (name, cat, sub) => sub === 'POLE' || cat === 'POLE' || name.includes('pole') || name.includes('tiang'));
+    const clrCable = isMainFeeder
+      ? emptyMetric
+      : calcMetrics('CLUSTER', (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
+    const clrFdt = isMainFeeder
+      ? emptyMetric
+      : calcMetrics('CLUSTER', (name, cat, sub) => sub === 'FDT' || cat === 'FDT' || name.includes('fdt'));
+    const clrFat = isMainFeeder
+      ? emptyMetric
+      : calcMetrics('CLUSTER', (name, cat, sub) => sub === 'FAT' || cat === 'FAT' || name.includes('fat'));
+    const clrWireSling = isMainFeeder
+      ? emptyMetric
+      : calcMetrics('CLUSTER', (name, cat, sub) => sub === 'ACC' || cat === 'ACCESSORY' || cat === 'SELING' || name.includes('seling') || name.includes('wire') || name.includes('sling') || name.includes('acc') || name.includes('perapihan'));
+
+    // Subfeeder / Main Feeder items
+    const feederScope = isMainFeeder ? 'MAIN_FEEDER' : 'SUBFEEDER';
+    const sfPole = calcMetrics(feederScope, (name, cat, sub) => sub === 'POLE' || cat === 'POLE' || name.includes('pole') || name.includes('tiang'));
+    const sfCable = calcMetrics(feederScope, (name, cat, sub) => sub === 'CABLE' || cat === 'CABLE' || name.includes('kabel') || name.includes('cable'));
+    const sfJc = calcMetrics(feederScope, (name, cat, sub) => sub === 'JC' || cat === 'JC' || name.includes('jc') || name.includes('joint closure'));
 
     // Match with official sitelist metadata
     const lowerClusterName = cluster.name.trim().toLowerCase();
@@ -344,8 +364,10 @@ export async function getWhatsAppReportData(
     );
 
     const siteId = matchedSite?.clusterId || cluster.code || `CLRMO7-99-${cluster.name.toUpperCase()}`;
-    const officialSiteName = matchedSite?.clusterName || `KELURAHAN ${cluster.name.toUpperCase()} BLORA`;
-    const oltName = matchedSite?.oltName ? matchedSite.oltName.replace(/^OLT\s+/i, '') : 'Balun';
+    const officialSiteName =
+      matchedSite?.clusterName ||
+      (isMainFeeder ? cluster.clusterName || cluster.name.toUpperCase() : `KELURAHAN ${cluster.name.toUpperCase()} BLORA`);
+    const oltName = matchedSite?.oltName ? matchedSite.oltName.replace(/^OLT\s+/i, '') : cluster.oltName ? cluster.oltName.replace(/^OLT\s+/i, '') : 'Balun';
 
     return {
       success: true,
@@ -360,6 +382,7 @@ export async function getWhatsAppReportData(
         startImDate: '01/11/26',
         reporterName: reporterNames.join(', '),
         teamName: teamNames.join(', '),
+        isMainFeeder,
         availableClusters: allClusters,
         availableDates: availableDates.length > 0 ? availableDates : [targetReportDate],
         clustersWithReportsOnDate,

@@ -63,7 +63,10 @@ export default async function ClustersPage() {
             };
           });
 
-          const clusterCalc = calculateClusterProgress(calcInput);
+          const isMainFeeder = cluster.projectType === 'MAIN_FEEDER';
+          const clusterCalc = calculateClusterProgress(calcInput, {
+            projectType: cluster.projectType,
+          });
 
           const sortedRawItems = sortWorkItems(cluster.workItems || []);
           const items = sortedRawItems.map((it: any) => {
@@ -89,9 +92,19 @@ export default async function ClustersPage() {
                     <Building2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-slate-900">{cluster.name}</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-slate-900">{cluster.name}</h2>
+                      {isMainFeeder && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                          MAIN FEEDER (100%)
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">
-                      Home Passes: <strong className="text-slate-700">{cluster.homePasses || '-'}</strong> • Progress: <strong className="text-blue-600">{clusterCalc.totalWeightedPercentage}%</strong> (CLR 70%: {clusterCalc.clr.scopePercentage}% | SF 30%: {clusterCalc.sf.scopePercentage}%)
+                      Home Passes: <strong className="text-slate-700">{cluster.homePasses || '-'}</strong> • Progress: <strong className="text-blue-600">{clusterCalc.totalWeightedPercentage}%</strong>{' '}
+                      {isMainFeeder
+                        ? `(Main Feeder 100%: ${clusterCalc.sf.scopePercentage}%)`
+                        : `(CLR 70%: ${clusterCalc.clr.scopePercentage}% | SF 30%: ${clusterCalc.sf.scopePercentage}%)`}
                     </p>
                   </div>
                 </div>
@@ -136,12 +149,14 @@ export default async function ClustersPage() {
                         <td className="p-3 text-center">
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              it.scope === 'SUBFEEDER'
+                              it.scope === 'MAIN_FEEDER'
+                                ? 'bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                : it.scope === 'SUBFEEDER'
                                 ? 'bg-purple-100 text-purple-700 border border-purple-200'
                                 : 'bg-blue-100 text-blue-700 border border-blue-200'
                             }`}
                           >
-                            {it.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
+                            {it.scope === 'MAIN_FEEDER' ? 'MF (100%)' : it.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
                           </span>
                         </td>
                         <td className="p-3">

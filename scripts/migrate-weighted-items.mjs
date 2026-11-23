@@ -18,7 +18,7 @@ try {
 const SUBFEEDER_ONLY_CABLES = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
 
 function getCanonicalSortOrder(scope, subCategory, itemName) {
-  const scopeRank = scope === 'SUBFEEDER' ? 1 : 0;
+  const scopeRank = scope === 'MAIN_FEEDER' ? 2 : scope === 'SUBFEEDER' ? 1 : 0;
   const catRankMap = { POLE: 0, CABLE: 1, FAT: 2, FDT: 3, JC: 4 };
   const catRank = catRankMap[subCategory] ?? 5;
   const lower = (itemName || '').trim().toLowerCase();
@@ -159,7 +159,9 @@ async function main() {
       });
     }
 
-    // 1. Update existing items (and enforce Kabel 96c/144c/288c belong ONLY in SUBFEEDER,
+    const isMainFeeder = cluster.projectType === 'MAIN_FEEDER';
+
+    // 1. Update existing items (and enforce Kabel 96c/144c/288c belong ONLY in SUBFEEDER for CLUSTER_SF,
     //    plus migrate legacy Tiang Feeder -> Pole 7m "4" & Kabel Feeder -> Kabel 48c)
     for (const item of cluster.workItems) {
       const name = item.itemName.toLowerCase();
@@ -167,18 +169,19 @@ async function main() {
 
       const legacyTargetDef = LEGACY_SF_MAPPINGS[trimmedLower];
       if (legacyTargetDef) {
+        const targetScope = isMainFeeder ? 'MAIN_FEEDER' : legacyTargetDef.scope;
         const targetItem = await prisma.workItem.upsert({
           where: {
             clusterId_scope_itemName: {
               clusterId: cluster.id,
-              scope: legacyTargetDef.scope,
+              scope: targetScope,
               itemName: legacyTargetDef.itemName,
             },
           },
           update: {},
           create: {
             clusterId: cluster.id,
-            scope: legacyTargetDef.scope,
+            scope: targetScope,
             workType: legacyTargetDef.workType,
             category: legacyTargetDef.category,
             subCategory: legacyTargetDef.subCategory,
@@ -187,7 +190,7 @@ async function main() {
             unit: legacyTargetDef.unit,
             boq: item.boq,
             status: item.status || 'ONGOING',
-            sortOrder: legacyTargetDef.sortOrder,
+            sortOrder: getCanonicalSortOrder(targetScope, legacyTargetDef.subCategory, legacyTargetDef.itemName),
           },
         });
 
@@ -200,17 +203,17 @@ async function main() {
 
         await moveProgressItemsToTarget(item.id, targetItem.id);
         await prisma.workItem.delete({ where: { id: item.id } });
-        console.log(`  Migrated legacy "${item.itemName}" -> "${targetItem.itemName}" (SF)`);
+        console.log(`  Migrated legacy "${item.itemName}" -> "${targetItem.itemName}" (${targetScope})`);
         continue;
       }
 
       const cat = (item.category || '').toUpperCase();
-      let scope = item.scope || 'CLUSTER';
-      if (name.includes('feeder') || name.includes('sf-') || SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
+      let scope = isMainFeeder ? 'MAIN_FEEDER' : item.scope || 'CLUSTER';
+      if (!isMainFeeder && (name.includes('feeder') || name.includes('sf-') || SUBFEEDER_ONLY_CABLES.has(trimmedLower))) {
         scope = 'SUBFEEDER';
       }
 
-      if (item.scope === 'CLUSTER' && SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
+      if (!isMainFeeder && item.scope === 'CLUSTER' && SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
         const hasSfSibling = cluster.workItems.some(
           (other) =>
             other.id !== item.id &&
@@ -233,7 +236,7 @@ async function main() {
       if (cat === 'POLE' || name.includes('pole') || name.includes('tiang')) {
         workType = 'CW';
         subCategory = 'POLE';
-        weight = scope === 'SUBFEEDER' ? 50 : 40;
+        weight = scope === 'SUBFEEDER' || scope === 'MAIN_FEEDER' ? 50 : 40;
         unit = 'Btg';
       } else if (cat === 'CABLE' || name.includes('kabel') || name.includes('cable')) {
         workType = 'CW';
@@ -288,85 +291,87 @@ async function main() {
       });
     }
 
-    // 2. Ensure new/revised BOQ items from BOQ-list.xlsx exist in their respective scope
-    const ensuredScopedItems = [
-      {
-        scope: 'CLUSTER',
-        workType: 'CW',
-        category: 'POLE',
-        subCategory: 'POLE',
-        weight: 40,
-        itemName: 'Pole 9m "4"',
-        unit: 'Btg',
-        sortOrder: 4,
-      },
-      {
-        scope: 'CLUSTER',
-        workType: 'CW',
-        category: 'SELING',
-        subCategory: 'ACC',
-        weight: 10,
-        itemName: 'Seling',
-        unit: 'Meter',
-        sortOrder: 11,
-      },
-      {
-        scope: 'SUBFEEDER',
-        workType: 'CW',
-        category: 'CABLE',
-        subCategory: 'CABLE',
-        weight: 20,
-        itemName: 'Kabel 96c',
-        unit: 'Meter',
-        sortOrder: 102,
-      },
-      {
-        scope: 'SUBFEEDER',
-        workType: 'CW',
-        category: 'CABLE',
-        subCategory: 'CABLE',
-        weight: 20,
-        itemName: 'Kabel 144c',
-        unit: 'Meter',
-        sortOrder: 103,
-      },
-      {
-        scope: 'SUBFEEDER',
-        workType: 'CW',
-        category: 'CABLE',
-        subCategory: 'CABLE',
-        weight: 20,
-        itemName: 'Kabel 288c',
-        unit: 'Meter',
-        sortOrder: 104,
-      },
-    ];
+    // 2. Ensure new/revised BOQ items from BOQ-list.xlsx exist in their respective scope (only for CLUSTER_SF projects)
+    if (!isMainFeeder) {
+      const ensuredScopedItems = [
+        {
+          scope: 'CLUSTER',
+          workType: 'CW',
+          category: 'POLE',
+          subCategory: 'POLE',
+          weight: 40,
+          itemName: 'Pole 9m "4"',
+          unit: 'Btg',
+          sortOrder: 4,
+        },
+        {
+          scope: 'CLUSTER',
+          workType: 'CW',
+          category: 'SELING',
+          subCategory: 'ACC',
+          weight: 10,
+          itemName: 'Seling',
+          unit: 'Meter',
+          sortOrder: 11,
+        },
+        {
+          scope: 'SUBFEEDER',
+          workType: 'CW',
+          category: 'CABLE',
+          subCategory: 'CABLE',
+          weight: 20,
+          itemName: 'Kabel 96c',
+          unit: 'Meter',
+          sortOrder: 102,
+        },
+        {
+          scope: 'SUBFEEDER',
+          workType: 'CW',
+          category: 'CABLE',
+          subCategory: 'CABLE',
+          weight: 20,
+          itemName: 'Kabel 144c',
+          unit: 'Meter',
+          sortOrder: 103,
+        },
+        {
+          scope: 'SUBFEEDER',
+          workType: 'CW',
+          category: 'CABLE',
+          subCategory: 'CABLE',
+          weight: 20,
+          itemName: 'Kabel 288c',
+          unit: 'Meter',
+          sortOrder: 104,
+        },
+      ];
 
-    for (const reqItem of ensuredScopedItems) {
-      const sortOrder = getCanonicalSortOrder(reqItem.scope, reqItem.subCategory, reqItem.itemName);
-      await prisma.workItem.upsert({
-        where: {
-          clusterId_scope_itemName: {
+      for (const reqItem of ensuredScopedItems) {
+        const sortOrder = getCanonicalSortOrder(reqItem.scope, reqItem.subCategory, reqItem.itemName);
+        await prisma.workItem.upsert({
+          where: {
+            clusterId_scope_itemName: {
+              clusterId: cluster.id,
+              scope: reqItem.scope,
+              itemName: reqItem.itemName,
+            },
+          },
+          update: { sortOrder },
+          create: {
             clusterId: cluster.id,
             scope: reqItem.scope,
+            workType: reqItem.workType,
+            category: reqItem.category,
+            subCategory: reqItem.subCategory,
+            weight: reqItem.weight,
             itemName: reqItem.itemName,
+            unit: reqItem.unit,
+            boq: 0,
+            status: 'ONGOING',
+            sortOrder,
           },
-        },
-        update: { sortOrder },
-        create: {
-          clusterId: cluster.id,
-          scope: reqItem.scope,
-          workType: reqItem.workType,
-          category: reqItem.category,
-          subCategory: reqItem.subCategory,
-          weight: reqItem.weight,
-          itemName: reqItem.itemName,
-          unit: reqItem.unit,
-          boq: 0,
-          status: 'ONGOING',
-          sortOrder,
-        },
-      });
+        });
+      }
     }
   }
 

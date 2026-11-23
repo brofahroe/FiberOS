@@ -37,9 +37,11 @@ export interface ParsedSheetScopeData {
   allReferenceItems: ParsedBoqItem[];
 }
 
+export type BoqImportScope = 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER';
+
 export interface ParsedBoqResult {
   clusterName: string;
-  scope: 'CLUSTER' | 'SUBFEEDER';
+  scope: BoqImportScope;
   homePasses?: number;
   projectCode?: string;
   sheetName: string;
@@ -265,7 +267,7 @@ function parseSingleSheet(
 async function parseWorkbook(
   workbook: excel.WorkBook,
   originalFilename?: string,
-  preferredScope?: 'CLUSTER' | 'SUBFEEDER'
+  preferredScope?: BoqImportScope
 ): Promise<ParsedBoqResult> {
   const rules = await getBoqReferenceRules();
 
@@ -276,7 +278,7 @@ async function parseWorkbook(
     workbook.SheetNames.find((s) => s.toLowerCase().includes('boq')) ||
     workbook.SheetNames[0];
 
-  // Find "BoQ NRO All Feeder" sheet for SUBFEEDER
+  // Find "BoQ NRO All Feeder" sheet for SUBFEEDER / MAIN_FEEDER
   const subfeederSheetName =
     workbook.SheetNames.find((s) => s.trim().toLowerCase() === 'boq nro all feeder') ||
     workbook.SheetNames.find((s) => s.toLowerCase().includes('all feeder')) ||
@@ -299,24 +301,38 @@ async function parseWorkbook(
     originalFilename
   );
 
+  const lowerFilename = (originalFilename || '').toLowerCase();
+  const lowerSfName = (subfeederSheet.clusterName || '').toLowerCase();
   const filenameIndicatesSubfeeder =
-    (originalFilename || '').toLowerCase().includes('subfeeder') ||
-    (originalFilename || '').toLowerCase().includes('sf-');
+    lowerFilename.includes('subfeeder') || lowerFilename.includes('sf-');
+  const indicatesMainFeeder =
+    lowerFilename.includes('main feeder') ||
+    lowerFilename.includes('mainfeeder') ||
+    lowerFilename.includes('uplink') ||
+    lowerFilename.includes('backbone') ||
+    lowerSfName.includes('main feeder') ||
+    lowerSfName.includes('mainfeeder') ||
+    lowerSfName.includes('uplink') ||
+    lowerSfName.includes('backbone');
 
   // Determine initial scope:
   // 1. If preferredScope is explicitly provided by user in UI, use it
-  // 2. Otherwise if filename indicates subfeeder, use SUBFEEDER ("BoQ NRO All Feeder")
-  // 3. Otherwise if "BoQ NRO All Feeder" has active items (>0) and "BoQ NRO Cluster" has 0 active items, use SUBFEEDER
-  let activeScope: 'CLUSTER' | 'SUBFEEDER' = 'CLUSTER';
+  // 2. If filename/sheet name indicates Main Feeder / Uplink without Cluster BOQ, use MAIN_FEEDER (100% Feeder)
+  // 3. Otherwise if filename indicates subfeeder, use SUBFEEDER ("BoQ NRO All Feeder")
+  // 4. Otherwise if "BoQ NRO All Feeder" has active items (>0) and "BoQ NRO Cluster" has 0 active items, use SUBFEEDER
+  let activeScope: BoqImportScope = 'CLUSTER';
   if (preferredScope) {
     activeScope = preferredScope;
+  } else if (indicatesMainFeeder && !clusterSheet.hasActiveVolume) {
+    activeScope = 'MAIN_FEEDER';
   } else if (filenameIndicatesSubfeeder) {
     activeScope = 'SUBFEEDER';
   } else if (subfeederSheet.hasActiveVolume && !clusterSheet.hasActiveVolume) {
     activeScope = 'SUBFEEDER';
   }
 
-  const chosen = activeScope === 'SUBFEEDER' ? subfeederSheet : clusterSheet;
+  const chosen =
+    activeScope === 'SUBFEEDER' || activeScope === 'MAIN_FEEDER' ? subfeederSheet : clusterSheet;
 
   return {
     clusterName: chosen.clusterName || clusterSheet.clusterName,
@@ -334,7 +350,7 @@ async function parseWorkbook(
 export async function parseBoqExcel(
   base64Data: string,
   originalFilename?: string,
-  preferredScope?: 'CLUSTER' | 'SUBFEEDER'
+  preferredScope?: BoqImportScope
 ): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
     const buffer = Buffer.from(base64Data, 'base64');
@@ -350,7 +366,7 @@ export async function parseBoqExcel(
 
 export async function parseSampleBoqFile(
   filename: string,
-  preferredScope?: 'CLUSTER' | 'SUBFEEDER'
+  preferredScope?: BoqImportScope
 ): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
     const filePath = path.resolve(filename);
@@ -368,10 +384,14 @@ export async function parseSampleBoqFile(
   }
 }
 
-function getWorkItemWeightAndType(category: string, scope: 'CLUSTER' | 'SUBFEEDER') {
+function getWorkItemWeightAndType(category: string, scope: BoqImportScope) {
   const cat = category.toUpperCase();
   if (cat === 'POLE') {
-    return { workType: 'CW', subCategory: 'POLE', weight: scope === 'SUBFEEDER' ? 50 : 40 };
+    return {
+      workType: 'CW',
+      subCategory: 'POLE',
+      weight: scope === 'SUBFEEDER' || scope === 'MAIN_FEEDER' ? 50 : 40,
+    };
   }
   if (cat === 'CABLE') {
     return { workType: 'CW', subCategory: 'CABLE', weight: 20 };
@@ -390,7 +410,7 @@ function getWorkItemWeightAndType(category: string, scope: 'CLUSTER' | 'SUBFEEDE
 
 export async function commitBoqImport(data: {
   clusterName: string;
-  scope?: 'CLUSTER' | 'SUBFEEDER';
+  scope?: BoqImportScope;
   homePasses?: number;
   items: ParsedBoqItem[];
 }) {
@@ -410,15 +430,20 @@ export async function commitBoqImport(data: {
       });
     }
 
-    const cleanedName = cleanClusterName(data.clusterName);
-    const scope: 'CLUSTER' | 'SUBFEEDER' =
+    const scope: BoqImportScope =
       data.scope || (data.clusterName.toUpperCase().includes('SF') ? 'SUBFEEDER' : 'CLUSTER');
+    const isMainFeeder = scope === 'MAIN_FEEDER';
+    const cleanedName = isMainFeeder
+      ? data.clusterName.trim().toUpperCase()
+      : cleanClusterName(data.clusterName);
 
-    const matchedSite = sitelistData.sites.find(
-      (s) =>
-        s.shortName.toLowerCase() === cleanedName.toLowerCase() ||
-        s.clusterName.toLowerCase() === data.clusterName.trim().toLowerCase()
-    );
+    const matchedSite = isMainFeeder
+      ? undefined
+      : sitelistData.sites.find(
+          (s) =>
+            s.shortName.toLowerCase() === cleanedName.toLowerCase() ||
+            s.clusterName.toLowerCase() === data.clusterName.trim().toLowerCase()
+        );
 
     let cluster = await prisma.cluster.findFirst({
       where: {
@@ -432,21 +457,35 @@ export async function commitBoqImport(data: {
         data: {
           projectId: project.id,
           name: cleanedName,
-          code: matchedSite?.clusterId || `CLRM07-99-${cleanedName}`,
+          code: isMainFeeder
+            ? `MF-${cleanedName.slice(0, 24)}`
+            : matchedSite?.clusterId || `CLRM07-99-${cleanedName}`,
           emrSiteCode: matchedSite?.emrSiteCode || undefined,
-          subfeederId: matchedSite?.subfeederId || undefined,
-          clusterName: matchedSite?.clusterName || `KELURAHAN ${cleanedName} BLORA`,
-          oltName: matchedSite?.oltName || 'OLT Balun',
+          subfeederId: isMainFeeder ? cleanedName : matchedSite?.subfeederId || undefined,
+          clusterName: isMainFeeder
+            ? cleanedName
+            : matchedSite?.clusterName || `KELURAHAN ${cleanedName} BLORA`,
+          oltName: matchedSite?.oltName || 'OLT Kedungtuban',
           kecamatan: matchedSite?.kecamatan || 'Kedungtuban',
           kabupaten: matchedSite?.kabupaten || 'Blora',
+          projectType: isMainFeeder ? 'MAIN_FEEDER' : 'CLUSTER_SF',
           homePasses: data.homePasses || 0,
         },
       });
-    } else if (data.homePasses && data.homePasses > 0) {
-      await prisma.cluster.update({
-        where: { id: cluster.id },
-        data: { homePasses: data.homePasses },
-      });
+    } else {
+      const updateData: { homePasses?: number; projectType?: string } = {};
+      if (data.homePasses && data.homePasses > 0) {
+        updateData.homePasses = data.homePasses;
+      }
+      if (isMainFeeder && cluster.projectType !== 'MAIN_FEEDER') {
+        updateData.projectType = 'MAIN_FEEDER';
+      }
+      if (Object.keys(updateData).length > 0) {
+        await prisma.cluster.update({
+          where: { id: cluster.id },
+          data: updateData,
+        });
+      }
     }
 
     // Aggregate items that map to the same BOQ target name (e.g. JC 48c + JC 144c -> Joint Closure (JC))
@@ -477,7 +516,14 @@ export async function commitBoqImport(data: {
     const itemsToSave = nonZeroAggregated.length > 0 ? nonZeroAggregated : allAggregated;
     const savedNamesForCurrentScope = new Set(
       itemsToSave
-        .filter((i) => (isSubfeederOnlyBoqItem(i.boqName) ? 'SUBFEEDER' : scope) === scope)
+        .filter((i) => {
+          const itemScope: BoqImportScope = isMainFeeder
+            ? 'MAIN_FEEDER'
+            : isSubfeederOnlyBoqItem(i.boqName)
+            ? 'SUBFEEDER'
+            : scope;
+          return itemScope === scope;
+        })
         .map((i) => i.boqName.toLowerCase())
     );
 
@@ -488,10 +534,9 @@ export async function commitBoqImport(data: {
     };
 
     const existingWorkItems = await prisma.workItem.findMany({
-      where: {
-        clusterId: cluster.id,
-        scope,
-      },
+      where: isMainFeeder
+        ? { clusterId: cluster.id }
+        : { clusterId: cluster.id, scope },
       include: {
         progressList: true,
       },
@@ -499,28 +544,30 @@ export async function commitBoqImport(data: {
 
     for (const oldItem of existingWorkItems) {
       const oldLower = oldItem.itemName.trim().toLowerCase();
-      const legacyTargetName = scope === 'SUBFEEDER' ? legacySfTargetMap[oldLower] : undefined;
+      const legacyTargetName =
+        scope === 'SUBFEEDER' || scope === 'MAIN_FEEDER' ? legacySfTargetMap[oldLower] : undefined;
       if (legacyTargetName) {
         const targetItemDef = itemsToSave.find(
           (it) => it.boqName.trim().toLowerCase() === legacyTargetName.toLowerCase()
         );
         if (targetItemDef) {
+          const targetLegacyScope: BoqImportScope = isMainFeeder ? 'MAIN_FEEDER' : 'SUBFEEDER';
           const { workType, subCategory, weight } = getWorkItemWeightAndType(
             targetItemDef.category,
-            'SUBFEEDER'
+            targetLegacyScope
           );
           const targetWorkItem = await prisma.workItem.upsert({
             where: {
               clusterId_scope_itemName: {
                 clusterId: cluster.id,
-                scope: 'SUBFEEDER',
+                scope: targetLegacyScope,
                 itemName: targetItemDef.boqName,
               },
             },
             update: {},
             create: {
               clusterId: cluster.id,
-              scope: 'SUBFEEDER',
+              scope: targetLegacyScope,
               workType,
               category: targetItemDef.category,
               subCategory,
@@ -528,7 +575,12 @@ export async function commitBoqImport(data: {
               itemName: targetItemDef.boqName,
               unit: targetItemDef.unit,
               boq: targetItemDef.quantity,
-              sortOrder: 100,
+              sortOrder: getCanonicalWorkItemSortOrder({
+                scope: targetLegacyScope,
+                category: targetItemDef.category,
+                subCategory,
+                itemName: targetItemDef.boqName,
+              }),
             },
           });
 
@@ -560,9 +612,12 @@ export async function commitBoqImport(data: {
         }
       }
 
+      const shouldNotExistInMainFeeder = isMainFeeder && oldItem.scope !== 'MAIN_FEEDER';
       const shouldNotExistInCluster = scope === 'CLUSTER' && isSubfeederOnlyBoqItem(oldItem.itemName);
       if (
-        (!savedNamesForCurrentScope.has(oldLower) || shouldNotExistInCluster) &&
+        (!savedNamesForCurrentScope.has(oldLower) ||
+          shouldNotExistInCluster ||
+          shouldNotExistInMainFeeder) &&
         oldItem.progressList.length === 0
       ) {
         await prisma.workItem.delete({ where: { id: oldItem.id } });
@@ -570,7 +625,9 @@ export async function commitBoqImport(data: {
     }
 
     for (const it of itemsToSave) {
-      const targetScope: 'CLUSTER' | 'SUBFEEDER' = isSubfeederOnlyBoqItem(it.boqName)
+      const targetScope: BoqImportScope = isMainFeeder
+        ? 'MAIN_FEEDER'
+        : isSubfeederOnlyBoqItem(it.boqName)
         ? 'SUBFEEDER'
         : scope;
       const { workType, subCategory, weight } = getWorkItemWeightAndType(it.category, targetScope);
@@ -621,9 +678,16 @@ export async function commitBoqImport(data: {
     revalidatePath('/daily-input');
     revalidatePath('/sitelist');
 
+    const scopeLabel =
+      scope === 'MAIN_FEEDER'
+        ? 'Main Feeder 100% - BoQ NRO All Feeder'
+        : scope === 'SUBFEEDER'
+        ? 'Subfeeder 30% - BoQ NRO All Feeder'
+        : 'Cluster 70% - BoQ NRO Cluster';
+
     return {
       success: true,
-      message: `Berhasil mengimpor BOQ (${scope === 'SUBFEEDER' ? 'Subfeeder 30% - BoQ NRO All Feeder' : 'Cluster 70% - BoQ NRO Cluster'}) untuk cluster "${cluster.name}" dengan ${itemsToSave.length} item BOQ standar!`,
+      message: `Berhasil mengimpor BOQ (${scopeLabel}) untuk "${cluster.name}" dengan ${itemsToSave.length} item BOQ standar!`,
     };
   } catch (err: unknown) {
     console.error('Error committing BOQ import:', err);

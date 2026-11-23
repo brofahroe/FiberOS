@@ -6,6 +6,7 @@ import {
   parseBoqExcel,
   parseSampleBoqFile,
   commitBoqImport,
+  type BoqImportScope,
   ParsedBoqResult,
   ParsedBoqItem,
 } from '@/actions/importBoq';
@@ -30,7 +31,7 @@ export default function ImportBoqClient() {
   const [committing, setCommitting] = useState<boolean>(false);
   const [result, setResult] = useState<ParsedBoqResult | null>(null);
   const [clusterName, setClusterName] = useState<string>('');
-  const [scope, setScope] = useState<'CLUSTER' | 'SUBFEEDER'>('CLUSTER');
+  const [scope, setScope] = useState<BoqImportScope>('CLUSTER');
   const [homePasses, setHomePasses] = useState<string>('0');
   const [showAllRefItems, setShowAllRefItems] = useState<boolean>(false);
   const [showRefGuide, setShowRefGuide] = useState<boolean>(false);
@@ -45,11 +46,13 @@ export default function ImportBoqClient() {
     }
   };
 
-  const handleScopeChange = (newScope: 'CLUSTER' | 'SUBFEEDER') => {
+  const handleScopeChange = (newScope: BoqImportScope) => {
     setScope(newScope);
     if (result) {
       const targetSheet =
-        newScope === 'SUBFEEDER' ? result.subfeederSheet : result.clusterSheet;
+        newScope === 'SUBFEEDER' || newScope === 'MAIN_FEEDER'
+          ? result.subfeederSheet
+          : result.clusterSheet;
       if (targetSheet && targetSheet.clusterName) {
         setClusterName(targetSheet.clusterName);
       }
@@ -102,9 +105,9 @@ export default function ImportBoqClient() {
 
   // Active sheet data dynamically switches based on selected Scope:
   // CLUSTER -> sheet "BoQ NRO Cluster"
-  // SUBFEEDER -> sheet "BoQ NRO All Feeder"
+  // SUBFEEDER / MAIN_FEEDER -> sheet "BoQ NRO All Feeder"
   const activeSheetData = result
-    ? scope === 'SUBFEEDER' && result.subfeederSheet
+    ? (scope === 'SUBFEEDER' || scope === 'MAIN_FEEDER') && result.subfeederSheet
       ? result.subfeederSheet
       : scope === 'CLUSTER' && result.clusterSheet
       ? result.clusterSheet
@@ -194,7 +197,7 @@ export default function ImportBoqClient() {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold shadow-sm transition self-start sm:self-auto"
         >
           <Table2 className="w-4 h-4 text-blue-600" />
-          <span>Tabel Acuan BOQ-list.xlsx (14 Item)</span>
+          <span>Tabel Acuan BOQ-list.xlsx ({boqReferenceList.length} Item)</span>
           {showRefGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
       </div>
@@ -379,7 +382,9 @@ export default function ImportBoqClient() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nama Cluster Target
+                {scope === 'MAIN_FEEDER'
+                  ? 'Nama Pekerjaan / Link Main Feeder'
+                  : 'Nama Cluster Target'}
               </label>
               <input
                 type="text"
@@ -395,7 +400,7 @@ export default function ImportBoqClient() {
               </label>
               <select
                 value={scope}
-                onChange={(e) => handleScopeChange(e.target.value as 'CLUSTER' | 'SUBFEEDER')}
+                onChange={(e) => handleScopeChange(e.target.value as BoqImportScope)}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="CLUSTER">
@@ -404,11 +409,16 @@ export default function ImportBoqClient() {
                 <option value="SUBFEEDER">
                   📡 Pekerjaan Subfeeder (Bobot 30% • Sheet: BoQ NRO All Feeder)
                 </option>
+                <option value="MAIN_FEEDER">
+                  🛣️ Pekerjaan Main Feeder (Bobot 100% Feeder • Sheet: BoQ NRO All Feeder)
+                </option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Kapasitas Home Passes (HP)
+                {scope === 'MAIN_FEEDER'
+                  ? 'Kapasitas HP (Opsional • Non Cluster)'
+                  : 'Kapasitas Home Passes (HP)'}
               </label>
               <input
                 type="number"

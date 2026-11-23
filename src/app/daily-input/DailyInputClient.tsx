@@ -326,7 +326,8 @@ export default function DailyInputClient({
 
   // Items and photos
   const [items, setItems] = useState<ItemState[]>([]);
-  const [activeScopeTab, setActiveScopeTab] = useState<'CLUSTER' | 'SUBFEEDER' | 'ALL'>('CLUSTER');
+  const [selectedClusterProjectType, setSelectedClusterProjectType] = useState<'CLUSTER_SF' | 'MAIN_FEEDER'>('CLUSTER_SF');
+  const [activeScopeTab, setActiveScopeTab] = useState<'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER' | 'ALL'>('CLUSTER');
   const [loadingItems, setLoadingItems] = useState<boolean>(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [compressing, setCompressing] = useState<boolean>(false);
@@ -355,6 +356,12 @@ export default function DailyInputClient({
       if (res && res.cluster && res.cluster.id !== selectedClusterId) {
         setSelectedClusterId(res.cluster.id);
       }
+      const pType = res?.cluster?.projectType === 'MAIN_FEEDER' ? 'MAIN_FEEDER' : 'CLUSTER_SF';
+      setSelectedClusterProjectType(pType);
+      setActiveScopeTab((prev) => {
+        if (pType === 'MAIN_FEEDER') return 'MAIN_FEEDER';
+        return prev === 'MAIN_FEEDER' ? 'CLUSTER' : prev;
+      });
       if (res && res.items) {
         setItems(
           res.items.map((it: any) => ({
@@ -1096,28 +1103,44 @@ export default function DailyInputClient({
           </div>
 
           <div className="flex p-1 bg-slate-100 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setActiveScopeTab('CLUSTER')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                activeScopeTab === 'CLUSTER'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>🏙️ Cluster (70%)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveScopeTab('SUBFEEDER')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                activeScopeTab === 'SUBFEEDER'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <span>📡 Subfeeder (30%)</span>
-            </button>
+            {selectedClusterProjectType === 'MAIN_FEEDER' ? (
+              <button
+                type="button"
+                onClick={() => setActiveScopeTab('MAIN_FEEDER')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  activeScopeTab === 'MAIN_FEEDER'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>🛰️ Main Feeder (100%)</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveScopeTab('CLUSTER')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeScopeTab === 'CLUSTER'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>🏙️ Cluster (70%)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveScopeTab('SUBFEEDER')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeScopeTab === 'SUBFEEDER'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>📡 Subfeeder (30%)</span>
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={() => setActiveScopeTab('ALL')}
@@ -1160,7 +1183,13 @@ export default function DailyInputClient({
                       <span>{cat.label}</span>
                     </div>
                     <span className="text-[10px] font-semibold text-slate-500">
-                      {activeScopeTab === 'SUBFEEDER' ? 'Scope Subfeeder' : activeScopeTab === 'CLUSTER' ? 'Scope Cluster' : 'Semua Scope'}
+                      {activeScopeTab === 'MAIN_FEEDER'
+                        ? 'Scope Main Feeder (100%)'
+                        : activeScopeTab === 'SUBFEEDER'
+                        ? 'Scope Subfeeder'
+                        : activeScopeTab === 'CLUSTER'
+                        ? 'Scope Cluster'
+                        : 'Semua Scope'}
                     </span>
                   </div>
 
@@ -1183,8 +1212,20 @@ export default function DailyInputClient({
                               <span className={`text-sm font-semibold ${item.status === 'DONE' ? 'text-slate-600 line-through' : 'text-slate-900'}`}>
                                 {item.itemName}
                               </span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                                {item.scope === 'SUBFEEDER' ? 'SF (30%)' : 'CLR (70%)'}
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                  item.scope === 'MAIN_FEEDER'
+                                    ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                                    : item.scope === 'SUBFEEDER'
+                                    ? 'bg-purple-100 text-purple-700 border-purple-200'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}
+                              >
+                                {item.scope === 'MAIN_FEEDER'
+                                  ? 'MF (100%)'
+                                  : item.scope === 'SUBFEEDER'
+                                  ? 'SF (30%)'
+                                  : 'CLR (70%)'}
                               </span>
                               {item.status === 'DONE' && (
                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
