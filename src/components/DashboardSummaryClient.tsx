@@ -13,6 +13,10 @@ import {
   Filter,
   PlusCircle,
   Users,
+  Search,
+  Table2,
+  LayoutGrid,
+  X,
 } from 'lucide-react';
 
 function summarizeScopePoleCable(cluster: ClusterWithProgress) {
@@ -73,6 +77,9 @@ export default function DashboardSummaryClient({
 }) {
   const [selectedKabupaten, setSelectedKabupaten] = useState<string>('ALL');
   const [selectedKecamatan, setSelectedKecamatan] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [projectTypeFilter, setProjectTypeFilter] = useState<'ALL' | 'CLUSTER_SF' | 'MAIN_FEEDER'>('ALL');
+  const [viewMode, setViewMode] = useState<'TABLE' | 'CARD'>('TABLE');
 
   const kabupatenOptions = useMemo(() => {
     const set = new Set<string>(['Blora']);
@@ -143,6 +150,66 @@ export default function DashboardSummaryClient({
       cablePercentage: cableCategory.percentage,
     };
   }, [filteredClusters]);
+
+  const displayedClusters = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return filteredClusters.filter((c) => {
+      const pType = c.projectType === 'MAIN_FEEDER' ? 'MAIN_FEEDER' : 'CLUSTER_SF';
+      if (projectTypeFilter !== 'ALL' && pType !== projectTypeFilter) return false;
+      if (!q) return true;
+      const teamText = (c.teamNames || []).join(' ').toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.clusterName || '').toLowerCase().includes(q) ||
+        (c.code || '').toLowerCase().includes(q) ||
+        (c.kecamatan || '').toLowerCase().includes(q) ||
+        (c.oltName || '').toLowerCase().includes(q) ||
+        teamText.includes(q)
+      );
+    });
+  }, [filteredClusters, searchQuery, projectTypeFilter]);
+
+  const clusterRowsWithStats = useMemo(() => {
+    return displayedClusters.map((cluster) => ({
+      cluster,
+      summary: summarizeScopePoleCable(cluster),
+    }));
+  }, [displayedClusters]);
+
+  const tableTotals = useMemo(() => {
+    const totals = {
+      hp: 0,
+      clrPoleInst: 0,
+      clrPoleBoq: 0,
+      clrCableInst: 0,
+      clrCableBoq: 0,
+      sfPoleInst: 0,
+      sfPoleBoq: 0,
+      sfCableInst: 0,
+      sfCableBoq: 0,
+      fatInst: 0,
+      fatBoq: 0,
+      fdtInst: 0,
+      fdtBoq: 0,
+    };
+    for (const { cluster, summary } of clusterRowsWithStats) {
+      const isMf = cluster.projectType === 'MAIN_FEEDER';
+      totals.hp += cluster.homePasses || 0;
+      totals.clrPoleInst += summary.clrPole.installed;
+      totals.clrPoleBoq += summary.clrPole.boq;
+      totals.clrCableInst += summary.clrCable.installed;
+      totals.clrCableBoq += summary.clrCable.boq;
+      totals.sfPoleInst += isMf ? summary.mfPole.installed : summary.sfPole.installed;
+      totals.sfPoleBoq += isMf ? summary.mfPole.boq : summary.sfPole.boq;
+      totals.sfCableInst += isMf ? summary.mfCable.installed : summary.sfCable.installed;
+      totals.sfCableBoq += isMf ? summary.mfCable.boq : summary.sfCable.boq;
+      totals.fatInst += summary.fat.installed;
+      totals.fatBoq += summary.fat.boq;
+      totals.fdtInst += summary.fdt.installed;
+      totals.fdtBoq += summary.fdt.boq;
+    }
+    return totals;
+  }, [clusterRowsWithStats]);
 
   const activeRegionText =
     selectedKecamatan !== 'ALL'
@@ -315,18 +382,47 @@ export default function DashboardSummaryClient({
         </div>
       </div>
 
-      {/* Cluster Progress Overview Cards */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+      {/* Cluster Progress Overview Table & Cards */}
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
-              Progress Monitoring per Cluster ({filteredClusters.length})
+              Progress Monitoring per Cluster ({displayedClusters.length}
+              {displayedClusters.length !== filteredClusters.length ? ` / ${filteredClusters.length}` : ''})
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Daftar cluster aktif pada {activeRegionText}
+              Ringkasan progres, tim pelaksana, Pole, Kabel, FAT &amp; FDT pada {activeRegionText}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* View Toggle: Tabel vs Card */}
+            <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewMode('TABLE')}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  viewMode === 'TABLE'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                <span>Tabel</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('CARD')}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  viewMode === 'CARD'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Card</span>
+              </button>
+            </div>
+
             <Link
               href="/sitelist"
               className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 inline-flex items-center gap-1"
@@ -337,8 +433,47 @@ export default function DashboardSummaryClient({
               href="/matrix"
               className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
             >
-              Lihat Tabel Lengkap <ArrowRight className="w-3.5 h-3.5" />
+              Lihat Matriks <ArrowRight className="w-3.5 h-3.5" />
             </Link>
+          </div>
+        </div>
+
+        {/* Search & Type Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari nama cluster / Main Feeder, kode, OLT, kecamatan, atau tim pelaksana..."
+              className="w-full pl-9 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                title="Bersihkan pencarian"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-semibold text-slate-600">Tipe:</span>
+            <select
+              value={projectTypeFilter}
+              onChange={(e) =>
+                setProjectTypeFilter(e.target.value as 'ALL' | 'CLUSTER_SF' | 'MAIN_FEEDER')
+              }
+              className="px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ALL">Semua Tipe ({filteredClusters.length})</option>
+              <option value="CLUSTER_SF">Cluster + Subfeeder</option>
+              <option value="MAIN_FEEDER">Main Feeder (100%)</option>
+            </select>
           </div>
         </div>
 
@@ -355,9 +490,254 @@ export default function DashboardSummaryClient({
               <span>Buka Menu Sitelist untuk Mengaktifkan Cluster</span>
             </Link>
           </div>
+        ) : displayedClusters.length === 0 ? (
+          <div className="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+            <p className="text-sm font-semibold text-slate-600">
+              Tidak ada data yang cocok dengan pencarian &quot;{searchQuery}&quot;.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setProjectTypeFilter('ALL');
+              }}
+              className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition"
+            >
+              Reset Filter Pencarian
+            </button>
+          </div>
+        ) : viewMode === 'TABLE' ? (
+          <div className="overflow-x-auto table-scrollbar border border-slate-200 rounded-xl">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="px-2.5 py-3 text-center w-9">No</th>
+                  <th className="px-3 py-3 min-w-[200px]">Cluster / Link Feeder</th>
+                  <th className="px-3 py-3 min-w-[150px]">Tim Pelaksana</th>
+                  <th className="px-2.5 py-3 text-center whitespace-nowrap">Total %</th>
+                  <th className="px-2.5 py-3 text-center whitespace-nowrap">Scope %</th>
+                  <th className="px-2.5 py-3 text-right whitespace-nowrap">Pole CLR</th>
+                  <th className="px-2.5 py-3 text-right whitespace-nowrap">Kabel CLR (m)</th>
+                  <th className="px-2.5 py-3 text-right whitespace-nowrap">Pole SF / MF</th>
+                  <th className="px-2.5 py-3 text-right whitespace-nowrap">Kabel SF / MF (m)</th>
+                  <th className="px-2.5 py-3 text-right whitespace-nowrap">FAT</th>
+                  <th className="px-2.5 py-3 text-right whitespace-nowrap">FDT</th>
+                  <th className="px-3 py-3 text-right whitespace-nowrap">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {clusterRowsWithStats.map(({ cluster, summary }, idx) => {
+                  const isMf = cluster.projectType === 'MAIN_FEEDER';
+                  const poleRight = isMf ? summary.mfPole : summary.sfPole;
+                  const cableRight = isMf ? summary.mfCable : summary.sfCable;
+
+                  return (
+                    <tr key={cluster.id} className="hover:bg-blue-50/30 transition">
+                      <td className="px-2.5 py-2.5 text-center text-slate-400 font-medium">
+                        {idx + 1}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900 break-all" title={cluster.name}>
+                            {cluster.name}
+                          </span>
+                          {isMf && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
+                              MF 100%
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap gap-x-1.5">
+                          {cluster.kecamatan && <span>Kec. {cluster.kecamatan}</span>}
+                          {cluster.oltName && <span>• {cluster.oltName}</span>}
+                          <span>• HP: {cluster.homePasses || '-'}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {cluster.teamNames && cluster.teamNames.length > 0 ? (
+                          <div
+                            className="flex items-center gap-1 text-[11px] font-semibold text-slate-800"
+                            title={cluster.teamNames.join(', ')}
+                          >
+                            <Users className="w-3 h-3 text-blue-600 shrink-0" />
+                            <span>
+                              {cluster.teamNames.length > 2
+                                ? `${cluster.teamNames.slice(0, 2).join(', ')} (+${cluster.teamNames.length - 2})`
+                                : cluster.teamNames.join(', ')}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">Belum ada input</span>
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                        <div className="inline-flex flex-col items-center gap-1 min-w-[54px]">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                              cluster.percentage >= 100
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                : cluster.percentage > 0
+                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {cluster.percentage}%
+                          </span>
+                          <div className="w-12 bg-slate-200 rounded-full h-1 overflow-hidden">
+                            <div
+                              className={`h-1 rounded-full ${
+                                cluster.percentage >= 100 ? 'bg-emerald-500' : 'bg-blue-600'
+                              }`}
+                              style={{ width: `${Math.min(100, cluster.percentage)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-2.5 py-2.5 text-center whitespace-nowrap text-[10px]">
+                        {isMf ? (
+                          <span className="font-bold text-indigo-700">
+                            MF: {cluster.sfPercentage ?? cluster.percentage}%
+                          </span>
+                        ) : (
+                          <div className="space-y-0.5">
+                            <div className="text-blue-700 font-semibold">
+                              CLR: {cluster.clrPercentage || 0}%
+                            </div>
+                            <div className="text-purple-700 font-semibold">
+                              SF: {cluster.sfPercentage || 0}%
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                        {isMf ? (
+                          <span className="text-slate-400">-</span>
+                        ) : (
+                          <span>
+                            <strong className="text-slate-900">{formatCardStat(summary.clrPole.installed)}</strong>
+                            <span className="text-slate-400"> / {formatCardStat(summary.clrPole.boq)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                        {isMf ? (
+                          <span className="text-slate-400">-</span>
+                        ) : (
+                          <span>
+                            <strong className="text-slate-900">{formatCardStat(summary.clrCable.installed)}</strong>
+                            <span className="text-slate-400"> / {formatCardStat(summary.clrCable.boq)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                        <span>
+                          <strong className="text-slate-900">{formatCardStat(poleRight.installed)}</strong>
+                          <span className="text-slate-400"> / {formatCardStat(poleRight.boq)}</span>
+                        </span>
+                      </td>
+                      <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                        <span>
+                          <strong className="text-slate-900">{formatCardStat(cableRight.installed)}</strong>
+                          <span className="text-slate-400"> / {formatCardStat(cableRight.boq)}</span>
+                        </span>
+                      </td>
+                      <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                        {isMf ? (
+                          <span className="text-slate-400">-</span>
+                        ) : (
+                          <span>
+                            <strong className="text-slate-900">{formatCardStat(summary.fat.installed)}</strong>
+                            <span className="text-slate-400"> / {formatCardStat(summary.fat.boq)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                        {isMf ? (
+                          summary.mfJc.boq > 0 || summary.mfJc.installed > 0 ? (
+                            <span title="Joint Closure (JC) Main Feeder">
+                              <span className="text-[10px] text-indigo-600 font-semibold mr-1">JC:</span>
+                              <strong className="text-slate-900">{formatCardStat(summary.mfJc.installed)}</strong>
+                              <span className="text-slate-400"> / {formatCardStat(summary.mfJc.boq)}</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )
+                        ) : (
+                          <span>
+                            <strong className="text-slate-900">{formatCardStat(summary.fdt.installed)}</strong>
+                            <span className="text-slate-400"> / {formatCardStat(summary.fdt.boq)}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <Link
+                            href={`/daily-input?clusterId=${cluster.id}`}
+                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition"
+                          >
+                            + Input
+                          </Link>
+                          <Link
+                            href={`/matrix?clusterId=${cluster.id}`}
+                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition"
+                          >
+                            Matriks
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-800 text-[11px]">
+                <tr>
+                  <td colSpan={5} className="px-3 py-2.5 text-right">
+                    Total ({displayedClusters.length} Cluster/Link • {tableTotals.hp.toLocaleString('en-US')} HP):
+                  </td>
+                  <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                    {formatCardStat(Math.round(tableTotals.clrPoleInst * 10) / 10)} /{' '}
+                    <span className="text-slate-500 font-semibold">
+                      {formatCardStat(Math.round(tableTotals.clrPoleBoq * 10) / 10)}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                    {formatCardStat(Math.round(tableTotals.clrCableInst * 10) / 10)} /{' '}
+                    <span className="text-slate-500 font-semibold">
+                      {formatCardStat(Math.round(tableTotals.clrCableBoq * 10) / 10)}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                    {formatCardStat(Math.round(tableTotals.sfPoleInst * 10) / 10)} /{' '}
+                    <span className="text-slate-500 font-semibold">
+                      {formatCardStat(Math.round(tableTotals.sfPoleBoq * 10) / 10)}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                    {formatCardStat(Math.round(tableTotals.sfCableInst * 10) / 10)} /{' '}
+                    <span className="text-slate-500 font-semibold">
+                      {formatCardStat(Math.round(tableTotals.sfCableBoq * 10) / 10)}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                    {formatCardStat(Math.round(tableTotals.fatInst * 10) / 10)} /{' '}
+                    <span className="text-slate-500 font-semibold">
+                      {formatCardStat(Math.round(tableTotals.fatBoq * 10) / 10)}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                    {formatCardStat(Math.round(tableTotals.fdtInst * 10) / 10)} /{' '}
+                    <span className="text-slate-500 font-semibold">
+                      {formatCardStat(Math.round(tableTotals.fdtBoq * 10) / 10)}
+                    </span>
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredClusters.map((cluster) => (
+            {displayedClusters.map((cluster) => (
               <div
                 key={cluster.id}
                 className="min-w-0 overflow-hidden border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition bg-white"
