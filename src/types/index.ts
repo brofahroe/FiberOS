@@ -29,6 +29,7 @@ export interface ClusterWithProgress {
   kecamatan?: string | null;
   kabupaten?: string | null;
   projectType?: 'CLUSTER_SF' | 'MAIN_FEEDER';
+  teamNames?: string[];
   homePasses: number;
   totalBoq: number;
   totalInstalled: number;

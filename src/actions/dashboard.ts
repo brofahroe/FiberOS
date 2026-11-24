@@ -28,6 +28,14 @@ export async function getDashboardData() {
                 progressList: true,
               },
             },
+            dailyReports: {
+              select: {
+                reportDate: true,
+                teamName: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            },
           },
         },
       },
@@ -43,6 +51,14 @@ export async function getDashboardData() {
               workItems: {
                 include: {
                   progressList: true,
+                },
+              },
+              dailyReports: {
+                select: {
+                  reportDate: true,
+                  teamName: true,
+                  createdAt: true,
+                  updatedAt: true,
                 },
               },
             },
@@ -170,6 +186,23 @@ export async function getDashboardData() {
         s.clusterId.toLowerCase() === lowerClusterName
     );
 
+    const sortedReports = [...(cluster.dailyReports || [])].sort((a, b) => {
+      const dateDiff = parseReportDateMs(b.reportDate) - parseReportDateMs(a.reportDate);
+      if (dateDiff !== 0) return dateDiff;
+      const bTime = (b.updatedAt || b.createdAt).getTime();
+      const aTime = (a.updatedAt || a.createdAt).getTime();
+      return bTime - aTime;
+    });
+    const allTeamNames = Array.from(
+      new Set(
+        sortedReports
+          .map((r) => (r.teamName || '').trim())
+          .filter((t) => t.length > 0 && t.toLowerCase() !== 'tanpa nama tim')
+      )
+    );
+    const specificTeams = allTeamNames.filter((t) => t.toLowerCase() !== 'tim ftth blora');
+    const teamNames = specificTeams.length > 0 ? specificTeams : allTeamNames;
+
     clustersWithProgress.push({
       id: cluster.id,
       name: cluster.name,
@@ -182,6 +215,7 @@ export async function getDashboardData() {
       kabupaten: cluster.kabupaten || matchedSite?.kabupaten || 'Blora',
       homePasses: cluster.homePasses,
       projectType: isMainFeeder ? 'MAIN_FEEDER' : 'CLUSTER_SF',
+      teamNames,
       totalBoq: Math.round(clusterBoq * 10) / 10,
       totalInstalled: Math.round(clusterInstalled * 10) / 10,
       percentage: clusterCalc.totalWeightedPercentage,

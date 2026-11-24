@@ -14,19 +14,22 @@ import {
   MapPin,
   Filter,
   PlusCircle,
+  Users,
 } from 'lucide-react';
 
 function summarizeScopePoleCable(cluster: ClusterWithProgress) {
   const sumBy = (
-    targetScope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER',
-    targetCategory: 'POLE' | 'CABLE'
+    targetScope: 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER' | 'ALL',
+    targetCategory: 'POLE' | 'CABLE' | 'FAT' | 'FDT' | 'JC'
   ) => {
     let boq = 0;
     let installed = 0;
     for (const it of cluster.workItems) {
       const itemScope = it.scope || 'CLUSTER';
       const matchesScope =
-        targetScope === 'MAIN_FEEDER'
+        targetScope === 'ALL'
+          ? true
+          : targetScope === 'MAIN_FEEDER'
           ? itemScope === 'MAIN_FEEDER' || itemScope === 'SUBFEEDER'
           : itemScope === targetScope;
       if (!matchesScope) continue;
@@ -50,8 +53,11 @@ function summarizeScopePoleCable(cluster: ClusterWithProgress) {
     clrCable: sumBy('CLUSTER', 'CABLE'),
     sfPole: sumBy('SUBFEEDER', 'POLE'),
     sfCable: sumBy('SUBFEEDER', 'CABLE'),
+    fat: sumBy('ALL', 'FAT'),
+    fdt: sumBy('ALL', 'FDT'),
     mfPole: sumBy('MAIN_FEEDER', 'POLE'),
     mfCable: sumBy('MAIN_FEEDER', 'CABLE'),
+    mfJc: sumBy('MAIN_FEEDER', 'JC'),
   };
 }
 
@@ -444,6 +450,26 @@ export default function DashboardSummaryClient({
                       </span>
                       {cluster.oltName ? ` • ${cluster.oltName}` : ''}
                     </p>
+                    <div
+                      className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-1 min-w-0"
+                      title={
+                        cluster.teamNames && cluster.teamNames.length > 0
+                          ? `Tim Pelaksana: ${cluster.teamNames.join(', ')}`
+                          : 'Belum ada input tim pelaksana'
+                      }
+                    >
+                      <Users className="w-3 h-3 text-blue-600 shrink-0" />
+                      <span className="shrink-0">Tim:</span>
+                      {cluster.teamNames && cluster.teamNames.length > 0 ? (
+                        <span className="font-semibold text-slate-700 truncate">
+                          {cluster.teamNames.length > 2
+                            ? `${cluster.teamNames.slice(0, 2).join(', ')} (+${cluster.teamNames.length - 2})`
+                            : cluster.teamNames.join(', ')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic truncate">Belum ada input</span>
+                      )}
+                    </div>
                   </div>
                   <span
                     className={`px-2.5 py-1 rounded-full text-xs font-extrabold shrink-0 whitespace-nowrap ${
@@ -558,46 +584,75 @@ export default function DashboardSummaryClient({
                             {formatCardStat(summary.mfCable.installed)} / {formatCardStat(summary.mfCable.boq)}
                           </span>
                         </div>
+                        {(summary.mfJc.boq > 0 || summary.mfJc.installed > 0) && (
+                          <div className="flex items-center justify-between gap-1 min-w-0 col-span-2 pt-1 border-t border-slate-100">
+                            <span className="truncate text-slate-500">Joint Closure (JC):</span>
+                            <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                              {formatCardStat(summary.mfJc.installed)} / {formatCardStat(summary.mfJc.boq)}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   }
 
                   return (
-                    <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] sm:text-xs grid grid-cols-2 gap-x-3 text-slate-600">
-                      <div className="space-y-1.5 pr-2 border-r border-slate-100 min-w-0">
-                        <div className="flex items-center justify-between gap-1 min-w-0">
-                          <span className="truncate text-slate-500" title="Total Pole Cluster">
-                            Pole Cluster:
-                          </span>
-                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
-                            {formatCardStat(summary.clrPole.installed)} / {formatCardStat(summary.clrPole.boq)}
-                          </span>
+                    <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] sm:text-xs text-slate-600 space-y-2">
+                      <div className="grid grid-cols-2 gap-x-3">
+                        <div className="space-y-1.5 pr-2 border-r border-slate-100 min-w-0">
+                          <div className="flex items-center justify-between gap-1 min-w-0">
+                            <span className="truncate text-slate-500" title="Total Pole Cluster">
+                              Pole Cluster:
+                            </span>
+                            <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                              {formatCardStat(summary.clrPole.installed)} / {formatCardStat(summary.clrPole.boq)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-1 min-w-0">
+                            <span className="truncate text-slate-500" title="Total Kabel Cluster (m)">
+                              Kabel Cluster:
+                            </span>
+                            <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                              {formatCardStat(summary.clrCable.installed)} / {formatCardStat(summary.clrCable.boq)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between gap-1 min-w-0">
-                          <span className="truncate text-slate-500" title="Total Kabel Cluster (m)">
-                            Kabel Cluster:
-                          </span>
-                          <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
-                            {formatCardStat(summary.clrCable.installed)} / {formatCardStat(summary.clrCable.boq)}
-                          </span>
+
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex items-center justify-between gap-1 min-w-0">
+                            <span className="truncate text-slate-500" title="Total Pole Subfeeder">
+                              Pole Subfeeder:
+                            </span>
+                            <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                              {formatCardStat(summary.sfPole.installed)} / {formatCardStat(summary.sfPole.boq)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-1 min-w-0">
+                            <span className="truncate text-slate-500" title="Total Kabel Subfeeder (m)">
+                              Kabel Subfeeder:
+                            </span>
+                            <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                              {formatCardStat(summary.sfCable.installed)} / {formatCardStat(summary.sfCable.boq)}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="space-y-1.5 min-w-0">
-                        <div className="flex items-center justify-between gap-1 min-w-0">
-                          <span className="truncate text-slate-500" title="Total Pole Subfeeder">
-                            Pole Subfeeder:
+                      <div className="grid grid-cols-2 gap-x-3 pt-1.5 border-t border-slate-100">
+                        <div className="flex items-center justify-between gap-1 pr-2 border-r border-slate-100 min-w-0">
+                          <span className="truncate text-slate-500" title="Status Terminasi FAT">
+                            FAT:
                           </span>
                           <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
-                            {formatCardStat(summary.sfPole.installed)} / {formatCardStat(summary.sfPole.boq)}
+                            {formatCardStat(summary.fat.installed)} / {formatCardStat(summary.fat.boq)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-1 min-w-0">
-                          <span className="truncate text-slate-500" title="Total Kabel Subfeeder (m)">
-                            Kabel Subfeeder:
+                          <span className="truncate text-slate-500" title="Status Terminasi FDT">
+                            FDT:
                           </span>
                           <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
-                            {formatCardStat(summary.sfCable.installed)} / {formatCardStat(summary.sfCable.boq)}
+                            {formatCardStat(summary.fdt.installed)} / {formatCardStat(summary.fdt.boq)}
                           </span>
                         </div>
                       </div>
