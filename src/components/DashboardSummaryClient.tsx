@@ -16,7 +16,66 @@ import {
   Table2,
   LayoutGrid,
   X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
+
+type ClusterSortKey =
+  | 'name'
+  | 'team'
+  | 'percentage'
+  | 'scopePct'
+  | 'clrPole'
+  | 'clrCable'
+  | 'sfPole'
+  | 'sfCable'
+  | 'fat'
+  | 'fdt';
+
+type MfSortKey = 'name' | 'team' | 'percentage' | 'pole' | 'cable' | 'jc';
+
+function SortHeaderButton({
+  label,
+  active,
+  dir,
+  align = 'left',
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: 'asc' | 'desc';
+  align?: 'left' | 'center' | 'right';
+  onClick: () => void;
+}) {
+  const justifyClass =
+    align === 'right'
+      ? 'justify-end ml-auto'
+      : align === 'center'
+      ? 'justify-center mx-auto'
+      : 'justify-start';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 font-bold hover:text-blue-600 transition select-none whitespace-nowrap ${justifyClass} ${
+        active ? 'text-blue-600' : ''
+      }`}
+      title={`Urutkan berdasarkan ${label}`}
+    >
+      <span>{label}</span>
+      {active ? (
+        dir === 'asc' ? (
+          <ArrowUp className="w-3 h-3 shrink-0" />
+        ) : (
+          <ArrowDown className="w-3 h-3 shrink-0" />
+        )
+      ) : (
+        <ArrowUpDown className="w-3 h-3 opacity-50 shrink-0" />
+      )}
+    </button>
+  );
+}
 
 function summarizeScopePoleCable(cluster: ClusterWithProgress) {
   const sumBy = (
@@ -175,15 +234,108 @@ export default function DashboardSummaryClient({
     }));
   }, [displayedClusters]);
 
-  const clusterOnlyRows = useMemo(
-    () => clusterRowsWithStats.filter((r) => r.cluster.projectType !== 'MAIN_FEEDER'),
-    [clusterRowsWithStats]
-  );
+  const [clusterSort, setClusterSort] = useState<{ key: ClusterSortKey; dir: 'asc' | 'desc' }>({
+    key: 'name',
+    dir: 'asc',
+  });
+  const [mfSort, setMfSort] = useState<{ key: MfSortKey; dir: 'asc' | 'desc' }>({
+    key: 'name',
+    dir: 'asc',
+  });
 
-  const mainFeederRows = useMemo(
-    () => clusterRowsWithStats.filter((r) => r.cluster.projectType === 'MAIN_FEEDER'),
-    [clusterRowsWithStats]
-  );
+  const toggleClusterSort = (key: ClusterSortKey) => {
+    setClusterSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'name' || key === 'team' ? 'asc' : 'desc' }
+    );
+  };
+
+  const toggleMfSort = (key: MfSortKey) => {
+    setMfSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: key === 'name' || key === 'team' ? 'asc' : 'desc' }
+    );
+  };
+
+  const clusterOnlyRows = useMemo(() => {
+    const base = clusterRowsWithStats.filter((r) => r.cluster.projectType !== 'MAIN_FEEDER');
+    const ratio = (s: { installed: number; boq: number }) =>
+      s.boq > 0 ? s.installed / s.boq : s.installed > 0 ? 1 : 0;
+
+    return [...base].sort((a, b) => {
+      let cmp = 0;
+      switch (clusterSort.key) {
+        case 'name':
+          cmp = a.cluster.name.localeCompare(b.cluster.name);
+          break;
+        case 'team':
+          cmp = (a.cluster.teamNames?.[0] || 'zzz').localeCompare(
+            b.cluster.teamNames?.[0] || 'zzz'
+          );
+          break;
+        case 'percentage':
+          cmp = a.cluster.percentage - b.cluster.percentage;
+          break;
+        case 'scopePct':
+          cmp = (a.cluster.clrPercentage || 0) - (b.cluster.clrPercentage || 0);
+          break;
+        case 'clrPole':
+          cmp = ratio(a.summary.clrPole) - ratio(b.summary.clrPole) || a.summary.clrPole.installed - b.summary.clrPole.installed;
+          break;
+        case 'clrCable':
+          cmp = ratio(a.summary.clrCable) - ratio(b.summary.clrCable) || a.summary.clrCable.installed - b.summary.clrCable.installed;
+          break;
+        case 'sfPole':
+          cmp = ratio(a.summary.sfPole) - ratio(b.summary.sfPole) || a.summary.sfPole.installed - b.summary.sfPole.installed;
+          break;
+        case 'sfCable':
+          cmp = ratio(a.summary.sfCable) - ratio(b.summary.sfCable) || a.summary.sfCable.installed - b.summary.sfCable.installed;
+          break;
+        case 'fat':
+          cmp = ratio(a.summary.fat) - ratio(b.summary.fat) || a.summary.fat.installed - b.summary.fat.installed;
+          break;
+        case 'fdt':
+          cmp = ratio(a.summary.fdt) - ratio(b.summary.fdt) || a.summary.fdt.installed - b.summary.fdt.installed;
+          break;
+      }
+      return clusterSort.dir === 'asc' ? cmp : -cmp;
+    });
+  }, [clusterRowsWithStats, clusterSort]);
+
+  const mainFeederRows = useMemo(() => {
+    const base = clusterRowsWithStats.filter((r) => r.cluster.projectType === 'MAIN_FEEDER');
+    const ratio = (s: { installed: number; boq: number }) =>
+      s.boq > 0 ? s.installed / s.boq : s.installed > 0 ? 1 : 0;
+
+    return [...base].sort((a, b) => {
+      let cmp = 0;
+      switch (mfSort.key) {
+        case 'name':
+          cmp = a.cluster.name.localeCompare(b.cluster.name);
+          break;
+        case 'team':
+          cmp = (a.cluster.teamNames?.[0] || 'zzz').localeCompare(
+            b.cluster.teamNames?.[0] || 'zzz'
+          );
+          break;
+        case 'percentage':
+          cmp = a.cluster.percentage - b.cluster.percentage;
+          break;
+        case 'pole':
+          cmp = ratio(a.summary.mfPole) - ratio(b.summary.mfPole) || a.summary.mfPole.installed - b.summary.mfPole.installed;
+          break;
+        case 'cable':
+          cmp = ratio(a.summary.mfCable) - ratio(b.summary.mfCable) || a.summary.mfCable.installed - b.summary.mfCable.installed;
+          break;
+        case 'jc':
+          cmp = ratio(a.summary.mfJc) - ratio(b.summary.mfJc) || a.summary.mfJc.installed - b.summary.mfJc.installed;
+          break;
+      }
+      return mfSort.dir === 'asc' ? cmp : -cmp;
+    });
+  }, [clusterRowsWithStats, mfSort]);
 
   const regionCounts = useMemo(() => {
     const mfCount = filteredClusters.filter((c) => c.projectType === 'MAIN_FEEDER').length;
@@ -814,16 +966,94 @@ export default function DashboardSummaryClient({
                         <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                           <tr>
                             <th className="px-2.5 py-3 text-center w-9">No</th>
-                            <th className="px-3 py-3 min-w-[180px]">Nama Cluster</th>
-                            <th className="px-3 py-3 min-w-[150px]">Tim Pelaksana</th>
-                            <th className="px-2.5 py-3 text-center whitespace-nowrap">Total %</th>
-                            <th className="px-2.5 py-3 text-center whitespace-nowrap">CLR / SF</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Pole CLR</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Kabel CLR (m)</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Pole SF</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Kabel SF (m)</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">FAT</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">FDT</th>
+                            <th className="px-3 py-3 min-w-[180px]">
+                              <SortHeaderButton
+                                label="Nama Cluster"
+                                active={clusterSort.key === 'name'}
+                                dir={clusterSort.dir}
+                                onClick={() => toggleClusterSort('name')}
+                              />
+                            </th>
+                            <th className="px-3 py-3 min-w-[150px]">
+                              <SortHeaderButton
+                                label="Tim Pelaksana"
+                                active={clusterSort.key === 'team'}
+                                dir={clusterSort.dir}
+                                onClick={() => toggleClusterSort('team')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-center whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Total %"
+                                active={clusterSort.key === 'percentage'}
+                                dir={clusterSort.dir}
+                                align="center"
+                                onClick={() => toggleClusterSort('percentage')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-center whitespace-nowrap">
+                              <SortHeaderButton
+                                label="CLR / SF"
+                                active={clusterSort.key === 'scopePct'}
+                                dir={clusterSort.dir}
+                                align="center"
+                                onClick={() => toggleClusterSort('scopePct')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Pole CLR"
+                                active={clusterSort.key === 'clrPole'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('clrPole')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Kabel CLR (m)"
+                                active={clusterSort.key === 'clrCable'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('clrCable')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Pole SF"
+                                active={clusterSort.key === 'sfPole'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('sfPole')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Kabel SF (m)"
+                                active={clusterSort.key === 'sfCable'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('sfCable')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="FAT"
+                                active={clusterSort.key === 'fat'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('fat')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="FDT"
+                                active={clusterSort.key === 'fdt'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('fdt')}
+                              />
+                            </th>
                             <th className="px-3 py-3 text-right whitespace-nowrap">Aksi</th>
                           </tr>
                         </thead>
@@ -1002,17 +1232,63 @@ export default function DashboardSummaryClient({
                   </div>
 
                   {viewMode === 'TABLE' ? (
-                    <div className="overflow-x-auto table-scrollbar border border-indigo-200/70 rounded-xl">
+                    <div className="overflow-x-auto table-scrollbar border border-indigo-200 rounded-xl">
                       <table className="w-full text-left text-xs border-collapse">
-                        <thead className="bg-indigo-50/70 text-slate-700 font-bold border-b border-indigo-200/70">
+                        <thead className="bg-slate-100 text-slate-700 font-bold border-b border-indigo-200">
                           <tr>
                             <th className="px-2.5 py-3 text-center w-9">No</th>
-                            <th className="px-3 py-3 min-w-[230px]">Link Main Feeder</th>
-                            <th className="px-3 py-3 min-w-[150px]">Tim Pelaksana</th>
-                            <th className="px-2.5 py-3 text-center whitespace-nowrap">Progress %</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Pole Feeder</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Kabel Feeder (m)</th>
-                            <th className="px-2.5 py-3 text-right whitespace-nowrap">Joint Closure (JC)</th>
+                            <th className="px-3 py-3 min-w-[230px]">
+                              <SortHeaderButton
+                                label="Link Main Feeder"
+                                active={mfSort.key === 'name'}
+                                dir={mfSort.dir}
+                                onClick={() => toggleMfSort('name')}
+                              />
+                            </th>
+                            <th className="px-3 py-3 min-w-[150px]">
+                              <SortHeaderButton
+                                label="Tim Pelaksana"
+                                active={mfSort.key === 'team'}
+                                dir={mfSort.dir}
+                                onClick={() => toggleMfSort('team')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-center whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Progress %"
+                                active={mfSort.key === 'percentage'}
+                                dir={mfSort.dir}
+                                align="center"
+                                onClick={() => toggleMfSort('percentage')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Pole Feeder"
+                                active={mfSort.key === 'pole'}
+                                dir={mfSort.dir}
+                                align="right"
+                                onClick={() => toggleMfSort('pole')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Kabel Feeder (m)"
+                                active={mfSort.key === 'cable'}
+                                dir={mfSort.dir}
+                                align="right"
+                                onClick={() => toggleMfSort('cable')}
+                              />
+                            </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Joint Closure (JC)"
+                                active={mfSort.key === 'jc'}
+                                dir={mfSort.dir}
+                                align="right"
+                                onClick={() => toggleMfSort('jc')}
+                              />
+                            </th>
                             <th className="px-3 py-3 text-right whitespace-nowrap">Aksi</th>
                           </tr>
                         </thead>
@@ -1104,7 +1380,7 @@ export default function DashboardSummaryClient({
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="bg-indigo-50/40 border-t border-indigo-200/70 font-bold text-slate-800 text-[11px]">
+                        <tfoot className="bg-slate-50 border-t border-indigo-200 font-bold text-slate-800 text-[11px]">
                           <tr>
                             <td colSpan={4} className="px-3 py-2.5 text-right">
                               Total Main Feeder ({mainFeederRows.length} Link):
