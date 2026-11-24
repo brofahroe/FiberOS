@@ -6,7 +6,6 @@ import { ProjectSummary, CategoryProgress, ClusterWithProgress } from '@/types';
 import {
   Layers,
   TrendingUp,
-  ArrowRight,
   HardHat,
   Cable,
   MapPin,
@@ -219,83 +218,66 @@ export default function DashboardSummaryClient({
       : `${project.name} (Semua Wilayah)`;
 
   return (
-    <div className="space-y-8">
-      {/* Filter Summary Wilayah (Per Kecamatan / Kabupaten) */}
-      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100">
-            <MapPin className="w-5 h-5" />
+    <div className="space-y-5">
+      {/* Compact Regional Filter Strip */}
+      <div className="bg-white rounded-2xl px-4 py-3 border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 shrink-0">
+            <MapPin className="w-4 h-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
-                Filter Summary Wilayah: {activeRegionText}
-              </h2>
-              {(selectedKecamatan !== 'ALL' || selectedKabupaten !== 'ALL') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedKabupaten('ALL');
-                    setSelectedKecamatan('ALL');
-                  }}
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline"
-                >
-                  Reset Filter
-                </button>
-              )}
-            </div>
-            <p className="text-xs text-slate-500">
-              Pilih ringkasan progres berdasarkan Kabupaten atau Kecamatan, atau kelola daftar lengkap di menu Sitelist.
-            </p>
+          <div className="min-w-0 flex items-center gap-2 flex-wrap">
+            <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+              {activeRegionText}
+            </span>
+            {(selectedKecamatan !== 'ALL' || selectedKabupaten !== 'ALL') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedKabupaten('ALL');
+                  setSelectedKecamatan('ALL');
+                }}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline shrink-0"
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-bold text-slate-600">Kabupaten:</span>
-            <select
-              value={selectedKabupaten}
-              onChange={(e) => setSelectedKabupaten(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="ALL">Semua Kabupaten</option>
-              {kabupatenOptions.map((kab) => (
-                <option key={kab} value={kab}>
-                  Kab. {kab}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-600">Kecamatan:</span>
-            <select
-              value={selectedKecamatan}
-              onChange={(e) => setSelectedKecamatan(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="ALL">Semua Kecamatan</option>
-              {kecamatanOptions.map((kec) => (
-                <option key={kec} value={kec}>
-                  Kec. {kec}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <Link
-            href="/sitelist"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Filter className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+          <select
+            value={selectedKabupaten}
+            onChange={(e) => setSelectedKabupaten(e.target.value)}
+            aria-label="Filter Kabupaten"
+            className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Menu Sitelist & Tambah Cluster</span>
-          </Link>
+            <option value="ALL">Semua Kabupaten</option>
+            {kabupatenOptions.map((kab) => (
+              <option key={kab} value={kab}>
+                Kab. {kab}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedKecamatan}
+            onChange={(e) => setSelectedKecamatan(e.target.value)}
+            aria-label="Filter Kecamatan"
+            className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="ALL">Semua Kecamatan</option>
+            {kecamatanOptions.map((kec) => (
+              <option key={kec} value={kec}>
+                Kec. {kec}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Primary KPI Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Total Progress</span>
@@ -422,19 +404,6 @@ export default function DashboardSummaryClient({
                 <span>Card</span>
               </button>
             </div>
-
-            <Link
-              href="/sitelist"
-              className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 inline-flex items-center gap-1"
-            >
-              + Tambah dari Sitelist
-            </Link>
-            <Link
-              href="/matrix"
-              className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-            >
-              Lihat Matriks <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
           </div>
         </div>
 
