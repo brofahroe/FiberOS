@@ -9,8 +9,6 @@ import {
   ArrowRight,
   HardHat,
   Cable,
-  Box,
-  Cpu,
   MapPin,
   Filter,
   PlusCircle,
@@ -110,19 +108,12 @@ export default function DashboardSummaryClient({
         ? Math.round(filteredClusters.reduce((s, c) => s + c.percentage, 0) / totalClusters)
         : 0;
 
-    const catDefs = [
-      { key: 'POLE', displayName: 'Tiang (Poles)', unit: 'Btg', icon: HardHat },
-      { key: 'CABLE', displayName: 'Penarikan Kabel', unit: 'Meter', icon: Cable },
-      { key: 'FAT', displayName: 'Terminasi FAT', unit: 'Pcs', icon: Box },
-      { key: 'FDT', displayName: 'Terminasi FDT', unit: 'Pcs', icon: Cpu },
-    ];
-
-    const computedCategories = catDefs.map((def) => {
+    const sumCategory = (key: 'POLE' | 'CABLE') => {
       let boq = 0;
       let installed = 0;
       for (const c of filteredClusters) {
         for (const it of c.workItems) {
-          if (it.category === def.key) {
+          if (it.category === key) {
             boq += it.boq;
             const effectiveInstalled =
               it.status === 'DONE' ? Math.max(it.installed, it.boq) : it.installed;
@@ -130,28 +121,26 @@ export default function DashboardSummaryClient({
           }
         }
       }
-      const pct = boq > 0 ? Math.min(100, Math.round((installed / boq) * 100)) : 0;
+      const percentage = boq > 0 ? Math.min(100, Math.round((installed / boq) * 100)) : 0;
       return {
-        ...def,
         boq: Math.round(boq * 10) / 10,
         installed: Math.round(installed * 10) / 10,
-        percentage: pct,
+        percentage,
       };
-    });
+    };
 
-    const poleCategory = computedCategories.find((c) => c.key === 'POLE');
-    const cableCategory = computedCategories.find((c) => c.key === 'CABLE');
+    const poleCategory = sumCategory('POLE');
+    const cableCategory = sumCategory('CABLE');
 
     return {
       totalClusters,
       overallProgress,
-      computedCategories,
-      totalPoleInstalled: poleCategory?.installed ?? 0,
-      totalPoleBoq: poleCategory?.boq ?? 0,
-      polePercentage: poleCategory?.percentage ?? 0,
-      totalCableInstalled: cableCategory?.installed ?? 0,
-      totalCableBoq: cableCategory?.boq ?? 0,
-      cablePercentage: cableCategory?.percentage ?? 0,
+      totalPoleInstalled: poleCategory.installed,
+      totalPoleBoq: poleCategory.boq,
+      polePercentage: poleCategory.percentage,
+      totalCableInstalled: cableCategory.installed,
+      totalCableBoq: cableCategory.boq,
+      cablePercentage: cableCategory.percentage,
     };
   }, [filteredClusters]);
 
@@ -323,54 +312,6 @@ export default function DashboardSummaryClient({
           <p className="text-xs text-slate-400 mt-2">
             Kabel terpasang vs BOQ ({dynamicStats.cablePercentage}%)
           </p>
-        </div>
-      </div>
-
-      {/* Progress Breakdown by Category */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Realisasi per Kategori Pekerjaan</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Akumulasi progres instalasi terhadap target BOQ ({activeRegionText})
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {dynamicStats.computedCategories.map((cat) => {
-            const Icon = cat.icon;
-            return (
-              <div
-                key={cat.key}
-                className="p-4 rounded-xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <span className="font-semibold text-sm text-slate-800">{cat.displayName}</span>
-                  </div>
-                  <span className="text-sm font-bold text-blue-600">{cat.percentage}%</span>
-                </div>
-                <div className="w-full bg-slate-200 rounded-full h-2 mb-2 overflow-hidden">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
-                    style={{ width: `${cat.percentage}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span>
-                    Terpasang: <strong className="text-slate-700">{cat.installed.toLocaleString()}</strong> {cat.unit}
-                  </span>
-                  <span>
-                    BOQ: {cat.boq.toLocaleString()} {cat.unit}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
