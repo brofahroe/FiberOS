@@ -54,6 +54,7 @@ export default function SitelistClient({
   const [selectedKecamatan, setSelectedKecamatan] = useState<string>('ALL');
   const [selectedOlt, setSelectedOlt] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'UNPROVISIONED'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'CLUSTER_SF' | 'MAIN_FEEDER'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Action states
@@ -97,6 +98,7 @@ export default function SitelistClient({
       if (selectedOlt !== 'ALL' && entry.oltName !== selectedOlt) return false;
       if (statusFilter === 'ACTIVE' && !entry.isProvisioned) return false;
       if (statusFilter === 'UNPROVISIONED' && entry.isProvisioned) return false;
+      if (categoryFilter !== 'ALL' && entry.projectType !== categoryFilter) return false;
 
       if (q) {
         const match =
@@ -112,7 +114,7 @@ export default function SitelistClient({
       }
       return true;
     });
-  }, [initialEntries, selectedKabupaten, selectedKecamatan, selectedOlt, statusFilter, searchQuery]);
+  }, [initialEntries, selectedKabupaten, selectedKecamatan, selectedOlt, statusFilter, categoryFilter, searchQuery]);
 
   // Dynamic KPI Summary for currently selected Kecamatan / Kabupaten filter
   const currentFilterStats = useMemo(() => {
@@ -735,6 +737,25 @@ export default function SitelistClient({
                 </option>
                 <option value="UNPROVISIONED">
                   Belum Diaktifkan ({initialEntries.filter((e) => !e.isProvisioned).length})
+                </option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-slate-700">Kategori:</span>
+              <select
+                value={categoryFilter}
+                onChange={(e) =>
+                  setCategoryFilter(e.target.value as 'ALL' | 'CLUSTER_SF' | 'MAIN_FEEDER')
+                }
+                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ALL">Semua Kategori</option>
+                <option value="CLUSTER_SF">
+                  Cluster + SF ({initialEntries.filter((e) => e.projectType !== 'MAIN_FEEDER').length})
+                </option>
+                <option value="MAIN_FEEDER">
+                  Main Feeder ({initialEntries.filter((e) => e.projectType === 'MAIN_FEEDER').length})
                 </option>
               </select>
             </div>

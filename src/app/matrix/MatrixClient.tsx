@@ -321,18 +321,42 @@ export default function MatrixClient({
       <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-          <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">Filter Cluster:</span>
+          <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">Filter Area:</span>
           <select
             value={selectedCluster}
             onChange={(e) => setSelectedCluster(e.target.value)}
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="ALL">Semua Cluster ({clustersList.length})</option>
-            {clustersList.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            <option value="ALL">Semua Area ({clustersList.length})</option>
+            {(() => {
+              const mfIds = new Set(
+                rows.filter((r) => r.scope === 'MAIN_FEEDER').map((r) => r.clusterId)
+              );
+              const regularClusters = clustersList.filter((c) => !mfIds.has(c.id));
+              const mfClusters = clustersList.filter((c) => mfIds.has(c.id));
+              return (
+                <>
+                  {regularClusters.length > 0 && (
+                    <optgroup label={`Cluster & Subfeeder (${regularClusters.length})`}>
+                      {regularClusters.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {mfClusters.length > 0 && (
+                    <optgroup label={`Main Feeder 100% (${mfClusters.length})`}>
+                      {mfClusters.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                </>
+              );
+            })()}
           </select>
         </div>
 
