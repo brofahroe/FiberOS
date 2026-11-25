@@ -531,20 +531,20 @@ export default function ImportBoqClient() {
                 <div className="space-y-1">
                   <p className="font-bold">
                     {hasOverwriteRisk
-                      ? `Peringatan Cegah Timpa: Target "${targetCheck.clusterName}" (${targetCheck.code || '-'}) sudah terdaftar!`
-                      : `Info Target: "${targetCheck.clusterName}" (${targetCheck.code || '-'}) sudah ada di database.`}
+                      ? `Peringatan Replace BOQ: Target "${targetCheck.clusterName}" (${targetCheck.code || '-'}) sudah memiliki BOQ pada scope ${scope}!`
+                      : `Info Target: "${targetCheck.clusterName}" (${targetCheck.code || '-'}) sudah aktif (scope ${scope} masih kosong).`}
                   </p>
                   <p>
-                    Data tersimpan saat ini ({targetCheck.projectType === 'MAIN_FEEDER' ? 'Main Feeder' : 'Cluster + SF'}):{' '}
+                    {hasOverwriteRisk ? 'BOQ tersimpan pada scope ini: ' : 'BOQ tersimpan di scope lain: '}
                     <strong>{targetCheck.existingSummary}</strong>.
                   </p>
                   {hasOverwriteRisk ? (
                     <p>
-                      Jika file ini adalah segmen/link berbeda, <strong>ubah kolom Nama di atas</strong> supaya data lama tidak tertimpa.
+                      Menyimpan akan <strong>MENIMPA / REPLACE penuh</strong> data BOQ lama pada scope <strong>{scope}</strong> (tidak di-append). Jika ini segmen/link berbeda, <strong>ubah kolom Nama di atas</strong> terlebih dahulu.
                     </p>
                   ) : (
                     <p>
-                      Scope <strong>{scope}</strong> belum memiliki data BOQ di cluster ini, jadi penyimpanan ini akan melengkapi cluster yang sudah ada.
+                      Scope <strong>{scope}</strong> belum memiliki BOQ aktif (`0`), sehingga menyimpan akan mengisi BOQ <strong>{scope}</strong> tanpa menimpa scope lainnya.
                     </p>
                   )}
                 </div>
@@ -559,7 +559,7 @@ export default function ImportBoqClient() {
                     className="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
                   />
                   <span>
-                    Ya, saya memang ingin memperbarui / menimpa BOQ yang ada di &quot;{targetCheck.clusterName}&quot;
+                    Ya, timpa / replace penuh BOQ scope {scope} di &quot;{targetCheck.clusterName}&quot; (jangan di-append)
                   </span>
                 </label>
               )}

@@ -460,7 +460,8 @@ export async function checkBoqTargetCluster(
       isMainFeeder ? w.scope === 'MAIN_FEEDER' : w.scope === scope
     );
     const activeInScope = itemsInScope.filter((w) => w.boq > 0);
-    const previewSource = activeInScope.length > 0 ? activeInScope : existing.workItems;
+    const allActiveItems = existing.workItems.filter((w) => w.boq > 0);
+    const previewSource = activeInScope.length > 0 ? activeInScope : allActiveItems;
     const existingSummary = previewSource
       .slice(0, 4)
       .map((w) => `${w.itemName}: ${w.boq.toLocaleString('en-US')}`)
@@ -472,10 +473,11 @@ export async function checkBoqTargetCluster(
       clusterName: existing.name,
       code: existing.code,
       projectType: existing.projectType,
-      itemCountInScope: activeInScope.length > 0 ? activeInScope.length : itemsInScope.length,
-      totalItemsCount: existing.workItems.length,
+      // Hitung hanya item yang benar-benar sudah memiliki BOQ > 0 pada scope target
+      itemCountInScope: activeInScope.length,
+      totalItemsCount: allActiveItems.length,
       existingSummary:
-        existingSummary || `${existing.workItems.length} item (BOQ 0)`,
+        existingSummary || `Template awal (${existing.workItems.length} item, BOQ 0)`,
     };
   } catch (err) {
     console.warn('Error checking BOQ target cluster:', err);
@@ -697,11 +699,12 @@ export async function commitBoqImport(data: {
 
       const shouldNotExistInMainFeeder = isMainFeeder && oldItem.scope !== 'MAIN_FEEDER';
       const shouldNotExistInCluster = scope === 'CLUSTER' && isSubfeederOnlyBoqItem(oldItem.itemName);
+      // Replace penuh: hapus semua item pada scope target yang tidak ada di BOQ baru
+      // (termasuk item lama yang sebelumnya salah masuk atau sudah tidak dipakai di BOQ baru)
       if (
-        (!savedNamesForCurrentScope.has(oldLower) ||
-          shouldNotExistInCluster ||
-          shouldNotExistInMainFeeder) &&
-        oldItem.progressList.length === 0
+        !savedNamesForCurrentScope.has(oldLower) ||
+        shouldNotExistInCluster ||
+        shouldNotExistInMainFeeder
       ) {
         await prisma.workItem.delete({ where: { id: oldItem.id } });
       }
