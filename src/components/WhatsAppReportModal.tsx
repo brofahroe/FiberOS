@@ -59,8 +59,8 @@ export default function WhatsAppReportModal({
   const [olt, setOlt] = useState<string>('Balun');
   const [ztePic, setZtePic] = useState<string>('HENDRI');
   const FIXED_SUBCON_NAME = 'PT. GCI Indonesia';
+  const FIXED_SUBCON_LEADER = 'Kamaludin Ihsan';
   const [teamQty, setTeamQty] = useState<string>('7 Orang');
-  const [subconLeader, setSubconLeader] = useState<string>('RICKY');
   const [startImDate, setStartImDate] = useState<string>('01/11/26');
   const [planAtpCw, setPlanAtpCw] = useState<string>('DD/MM/YY');
   const [planAtpOpm, setPlanAtpOpm] = useState<string>('0/0/2026');
@@ -102,7 +102,6 @@ export default function WhatsAppReportModal({
       const savedOlt = localStorage.getItem('wa_olt');
       const savedZtePic = localStorage.getItem('wa_ztePic');
       const savedTeamQty = localStorage.getItem('wa_teamQty');
-      const savedLeader = localStorage.getItem('wa_leader');
       const savedStartIm = localStorage.getItem('wa_startIm');
       const savedPlanCw = localStorage.getItem('wa_planCw');
       const savedPlanOpm = localStorage.getItem('wa_planOpm');
@@ -111,7 +110,6 @@ export default function WhatsAppReportModal({
       if (savedOlt) setOlt(savedOlt);
       if (savedZtePic) setZtePic(savedZtePic);
       if (savedTeamQty) setTeamQty(savedTeamQty);
-      if (savedLeader) setSubconLeader(savedLeader);
       if (savedStartIm) setStartImDate(savedStartIm);
       if (savedPlanCw) setPlanAtpCw(savedPlanCw);
       if (savedPlanOpm) setPlanAtpOpm(savedPlanOpm);
@@ -124,7 +122,6 @@ export default function WhatsAppReportModal({
       localStorage.setItem('wa_olt', olt);
       localStorage.setItem('wa_ztePic', ztePic);
       localStorage.setItem('wa_teamQty', teamQty);
-      localStorage.setItem('wa_leader', subconLeader);
       localStorage.setItem('wa_startIm', startImDate);
       localStorage.setItem('wa_planCw', planAtpCw);
       localStorage.setItem('wa_planOpm', planAtpOpm);
@@ -161,7 +158,6 @@ export default function WhatsAppReportModal({
         setSiteName(autoSiteName);
         if (primary.siteId) setSiteId(primary.siteId);
         if (primary.oltName) setOlt(primary.oltName);
-        if (primary.reporterName) setSubconLeader(primary.reporterName);
       }
       setCustomMessage(null); // Reset manual edit to show fresh report
     }
@@ -241,9 +237,6 @@ export default function WhatsAppReportModal({
       : itemData.officialSiteName || `KELURAHAN ${itemData.clusterName.toUpperCase()} BLORA`;
     const effectiveSiteId = isSingleSelection ? siteId || itemData.siteId : itemData.siteId;
     const effectiveOlt = isSingleSelection ? olt || itemData.oltName : itemData.oltName || olt;
-    const effectiveLeader = isSingleSelection
-      ? subconLeader
-      : itemData.reporterName || subconLeader;
 
     const headerBlock = `*ZTE BLORA FTTH Project MoraRepublic*
 *${itemData.formattedDate}*
@@ -254,7 +247,7 @@ OLT: ${effectiveOlt}
 ZTE PIC :  ${ztePic}
 Subcon name : ${FIXED_SUBCON_NAME}
 Subcon teams Qty : ${teamQty}
-Subcon leader : ${effectiveLeader}
+Subcon leader : ${FIXED_SUBCON_LEADER}
 Tanggal Start IM: ${startImDate}
  
 Format : ( SOW BOQ / TOTAL ACTUAL / PENCAPAIAN HARI INI ) : X/Y/Z`;
@@ -614,12 +607,12 @@ Install JC : ${s.jc.today > 0 ? formatNumber(s.jc.today) : '0'}`;
                       />
                     </div>
                     <div>
-                      <label className="font-semibold text-slate-600 block mb-1">Subcon Leader</label>
+                      <label className="font-semibold text-slate-600 block mb-1">Subcon Leader (Fix)</label>
                       <input
                         type="text"
-                        value={subconLeader}
-                        onChange={(e) => setSubconLeader(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                        readOnly
+                        value={FIXED_SUBCON_LEADER}
+                        className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg font-semibold text-slate-600 cursor-not-allowed"
                       />
                     </div>
                     <div>
