@@ -24,6 +24,7 @@ import {
 type ClusterSortKey =
   | 'name'
   | 'team'
+  | 'percentage'
   | 'clrPole'
   | 'clrCable'
   | 'sfPole'
@@ -31,7 +32,7 @@ type ClusterSortKey =
   | 'fat'
   | 'fdt';
 
-type MfSortKey = 'name' | 'team' | 'pole' | 'cable' | 'jc';
+type MfSortKey = 'name' | 'team' | 'percentage' | 'pole' | 'cable' | 'jc';
 
 function SortHeaderButton({
   label,
@@ -262,6 +263,9 @@ export default function DashboardSummaryClient({
             b.cluster.teamNames?.[0] || 'zzz'
           );
           break;
+        case 'percentage':
+          cmp = a.cluster.percentage - b.cluster.percentage;
+          break;
         case 'clrPole':
           cmp = ratio(a.summary.clrPole) - ratio(b.summary.clrPole) || a.summary.clrPole.installed - b.summary.clrPole.installed;
           break;
@@ -300,6 +304,9 @@ export default function DashboardSummaryClient({
           cmp = (a.cluster.teamNames?.[0] || 'zzz').localeCompare(
             b.cluster.teamNames?.[0] || 'zzz'
           );
+          break;
+        case 'percentage':
+          cmp = a.cluster.percentage - b.cluster.percentage;
           break;
         case 'pole':
           cmp = ratio(a.summary.mfPole) - ratio(b.summary.mfPole) || a.summary.mfPole.installed - b.summary.mfPole.installed;
@@ -398,11 +405,6 @@ export default function DashboardSummaryClient({
               >
                 {cluster.name}
               </Link>
-              {cluster.projectType === 'MAIN_FEEDER' && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
-                  Main Feeder (100%)
-                </span>
-              )}
               {cluster.kabupaten && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 shrink-0">
                   Kota {cluster.kabupaten}
@@ -938,6 +940,15 @@ export default function DashboardSummaryClient({
                                 onClick={() => toggleClusterSort('team')}
                               />
                             </th>
+                            <th className="px-2.5 py-3 text-center whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Progress %"
+                                active={clusterSort.key === 'percentage'}
+                                dir={clusterSort.dir}
+                                align="center"
+                                onClick={() => toggleClusterSort('percentage')}
+                              />
+                            </th>
                             <th className="px-2.5 py-3 text-right whitespace-nowrap">
                               <SortHeaderButton
                                 label="Pole CLR"
@@ -1032,6 +1043,29 @@ export default function DashboardSummaryClient({
                                   <span className="text-[11px] text-slate-400 italic">Belum ada input</span>
                                 )}
                               </td>
+                              <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                                <div className="inline-flex flex-col items-center gap-1 min-w-[54px]">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                                      cluster.percentage >= 100
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                        : cluster.percentage > 0
+                                        ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}
+                                  >
+                                    {cluster.percentage}%
+                                  </span>
+                                  <div className="w-12 bg-slate-200 rounded-full h-1 overflow-hidden">
+                                    <div
+                                      className={`h-1 rounded-full ${
+                                        cluster.percentage >= 100 ? 'bg-emerald-500' : 'bg-blue-600'
+                                      }`}
+                                      style={{ width: `${Math.min(100, cluster.percentage)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
                               <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
                                 <strong className="text-slate-900">{formatCardStat(summary.clrPole.installed)}</strong>
                                 <span className="text-slate-400"> / {formatCardStat(summary.clrPole.boq)}</span>
@@ -1069,7 +1103,7 @@ export default function DashboardSummaryClient({
                         </tbody>
                         <tfoot className="bg-slate-50 border-t border-slate-200 font-bold text-slate-800 text-[11px]">
                           <tr>
-                            <td colSpan={3} className="px-3 py-2.5 text-right">
+                            <td colSpan={4} className="px-3 py-2.5 text-right">
                               Total Cluster ({clusterOnlyRows.length} Cluster • {clusterTotals.hp.toLocaleString('en-US')} HP):
                             </td>
                             <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
@@ -1158,6 +1192,15 @@ export default function DashboardSummaryClient({
                                 onClick={() => toggleMfSort('team')}
                               />
                             </th>
+                            <th className="px-2.5 py-3 text-center whitespace-nowrap">
+                              <SortHeaderButton
+                                label="Progress %"
+                                active={mfSort.key === 'percentage'}
+                                dir={mfSort.dir}
+                                align="center"
+                                onClick={() => toggleMfSort('percentage')}
+                              />
+                            </th>
                             <th className="px-2.5 py-3 text-right whitespace-nowrap">
                               <SortHeaderButton
                                 label="Pole Feeder"
@@ -1195,18 +1238,13 @@ export default function DashboardSummaryClient({
                                 {idx + 1}
                               </td>
                               <td className="px-3 py-2.5">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <Link
-                                    href={`/matrix?clusterId=${cluster.id}`}
-                                    className="font-bold text-slate-900 hover:text-indigo-600 hover:underline break-all transition"
-                                    title={`Buka Matriks ${cluster.name}`}
-                                  >
-                                    {cluster.name}
-                                  </Link>
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0">
-                                    Main Feeder
-                                  </span>
-                                </div>
+                                <Link
+                                  href={`/matrix?clusterId=${cluster.id}`}
+                                  className="font-bold text-slate-900 hover:text-indigo-600 hover:underline break-all transition"
+                                  title={`Buka Matriks ${cluster.name}`}
+                                >
+                                  {cluster.name}
+                                </Link>
                                 <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap gap-x-1.5">
                                   {cluster.kabupaten && <span>Kota {cluster.kabupaten}</span>}
                                   {cluster.oltName && <span>• {cluster.oltName}</span>}
@@ -1229,6 +1267,29 @@ export default function DashboardSummaryClient({
                                 ) : (
                                   <span className="text-[11px] text-slate-400 italic">Belum ada input</span>
                                 )}
+                              </td>
+                              <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                                <div className="inline-flex flex-col items-center gap-1 min-w-[54px]">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                                      cluster.percentage >= 100
+                                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                        : cluster.percentage > 0
+                                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-300'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}
+                                  >
+                                    {cluster.percentage}%
+                                  </span>
+                                  <div className="w-12 bg-slate-200 rounded-full h-1 overflow-hidden">
+                                    <div
+                                      className={`h-1 rounded-full ${
+                                        cluster.percentage >= 100 ? 'bg-emerald-500' : 'bg-indigo-600'
+                                      }`}
+                                      style={{ width: `${Math.min(100, cluster.percentage)}%` }}
+                                    />
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
                                 <strong className="text-slate-900">{formatCardStat(summary.mfPole.installed)}</strong>
@@ -1255,7 +1316,7 @@ export default function DashboardSummaryClient({
                         </tbody>
                         <tfoot className="bg-slate-50 border-t border-indigo-200 font-bold text-slate-800 text-[11px]">
                           <tr>
-                            <td colSpan={3} className="px-3 py-2.5 text-right">
+                            <td colSpan={4} className="px-3 py-2.5 text-right">
                               Total Main Feeder ({mainFeederRows.length} Link):
                             </td>
                             <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
