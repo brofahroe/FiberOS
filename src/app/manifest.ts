@@ -7,7 +7,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Sistem Manajemen Progres Harian & Rollout FTTH GCI-MTI Blora',
     start_url: '/',
     display: 'standalone',
-    orientation: 'portrait-primary',
+    orientation: 'any',
     background_color: '#0f172a',
     theme_color: '#1e40af',
     icons: [

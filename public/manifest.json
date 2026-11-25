@@ -6,7 +6,7 @@
   "id": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#0f172a",
   "theme_color": "#1e40af",
   "categories": ["productivity", "business", "utilities"],

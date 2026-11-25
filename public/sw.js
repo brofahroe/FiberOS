@@ -1,5 +1,5 @@
 // FiberOS Progressive Web App Service Worker
-const CACHE_NAME = 'fiberos-pwa-v1';
+const CACHE_NAME = 'fiberos-pwa-v2';
 const OFFLINE_URL = '/offline.html';
 
 const STATIC_ASSETS = [

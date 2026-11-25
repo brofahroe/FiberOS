@@ -16,6 +16,7 @@ export default function PwaRegister() {
           .register('/sw.js')
           .then((reg) => {
             console.log('PWA: Service Worker registered with scope:', reg.scope);
+            reg.update().catch(() => {});
           })
           .catch((err) => {
             console.error('PWA: Service Worker registration failed:', err);
@@ -23,8 +24,14 @@ export default function PwaRegister() {
       });
     }
 
-    // 2. Check if already running as standalone PWA
+    // 2. Ensure screen orientation is unlocked so mobile PWA can auto-rotate to landscape
     if (typeof window !== 'undefined') {
+      try {
+        (window.screen?.orientation as { unlock?: () => void } | undefined)?.unlock?.();
+      } catch {
+        // Ignore on browsers where Screen Orientation unlock is unsupported
+      }
+
       const isStandalone =
         window.matchMedia('(display-mode: standalone)').matches ||
         (window.navigator as any).standalone === true;
