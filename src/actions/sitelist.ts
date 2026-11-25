@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import * as excel from 'xlsx';
 import { revalidatePath } from 'next/cache';
 import sitelistData from '@/data/sitelist.json';
 import {
@@ -294,10 +295,10 @@ export async function getSitelistData() {
         emrSiteCode: c.emrSiteCode || '-',
         subfeederId: c.subfeederId || `SF-${c.name.toUpperCase()}`,
         clusterId: c.code || `CLR-${c.name.toUpperCase()}`,
-        clusterName: c.clusterName || `KELURAHAN ${c.name.toUpperCase()} BLORA`,
+        clusterName: c.clusterName || c.name.toUpperCase(),
         shortName: c.name.toUpperCase(),
         oltName: c.oltName || 'OLT Balun',
-        kecamatan: c.kecamatan || 'Kedungtuban',
+        kecamatan: c.kecamatan || '-',
         kabupaten: c.kabupaten || 'Blora',
         startImpleDate: resolveStartImpleDate(c),
         homePasses: c.homePasses || 0,
@@ -507,7 +508,7 @@ export async function createOrActivateSitelistCluster(input: {
         code: input.clusterId.trim() || `CLRM07-99-${shortName}`,
         emrSiteCode: input.emrSiteCode.trim() || '-',
         subfeederId: input.subfeederId.trim() || `SFM07-99-${shortName}`,
-        clusterName: input.clusterName.trim().toUpperCase() || `KELURAHAN ${shortName} BLORA`,
+        clusterName: input.clusterName.trim().toUpperCase() || shortName,
         oltName: input.oltName.trim() || 'OLT Balun',
         kecamatan: input.kecamatan.trim() || 'Kedungtuban',
         kabupaten: input.kabupaten.trim() || 'Blora',
@@ -702,6 +703,386 @@ export async function activateAllSitelistClusters(kecamatanFilter?: string) {
   } catch (error: unknown) {
     console.error('Error activating all sitelist clusters:', error);
     const errMsg = error instanceof Error ? error.message : 'Gagal mengaktifkan sitelist.';
+    return { success: false, error: errMsg };
+  }
+}
+
+export interface ParsedSitelistImportRow {
+  rowNumber: number;
+  emrSiteCode: string;
+  subfeederId: string;
+  clusterId: string;
+  clusterName: string;
+  shortName: string;
+  oltName: string;
+  kota: string;
+  startImpleDate: string;
+  homePasses: number;
+  projectType: 'CLUSTER_SF' | 'MAIN_FEEDER';
+  existsInDb: boolean;
+  existingClusterId: string | null;
+}
+
+function normalizeSitelistHeader(header: unknown): string {
+  return String(header ?? '')
+    .toLowerCase()
+    .replace(/^\ufeff/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function formatExcelOrStringDate(raw: unknown): string {
+  if (raw === null || raw === undefined || raw === '') return '';
+  if (raw instanceof Date && !isNaN(raw.getTime())) {
+    const yyyy = raw.getFullYear();
+    const mm = String(raw.getMonth() + 1).padStart(2, '0');
+    const dd = String(raw.getDate()).padStart(2, '0');
+    return formatCanonicalReportDate(`${yyyy}-${mm}-${dd}`);
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 20000 && raw < 90000) {
+    const parsed = excel.SSF.parse_date_code(raw);
+    if (parsed && parsed.y && parsed.m && parsed.d) {
+      const mm = String(parsed.m).padStart(2, '0');
+      const dd = String(parsed.d).padStart(2, '0');
+      return formatCanonicalReportDate(`${parsed.y}-${mm}-${dd}`);
+    }
+  }
+  return formatCanonicalReportDate(String(raw).trim());
+}
+
+function deriveShortName(rawShort: string, rawClusterName: string, rawClusterId: string): string {
+  if (rawShort.trim()) return rawShort.trim().toUpperCase();
+  if (rawClusterName.trim()) {
+    return rawClusterName
+      .trim()
+      .toUpperCase()
+      .replace(/^KEL(URAHAN)?\.?\s+/i, '')
+      .replace(/^DESA\.?\s+/i, '')
+      .trim();
+  }
+  return rawClusterId.trim().toUpperCase();
+}
+
+export async function parseSitelistFile(
+  fileBase64: string,
+  filename: string
+): Promise<{
+  success: boolean;
+  sheetName?: string;
+  rows?: ParsedSitelistImportRow[];
+  skippedCount?: number;
+  detectedColumns?: string[];
+  error?: string;
+}> {
+  try {
+    if (!fileBase64) {
+      return { success: false, error: 'File kosong atau gagal dibaca.' };
+    }
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    const isCsv = filename.toLowerCase().endsWith('.csv');
+
+    let wb = excel.read(buffer, { type: 'buffer', cellDates: true });
+    let sheetName = wb.SheetNames[0];
+    let sheet = wb.Sheets[sheetName];
+    let matrix = excel.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][];
+
+    // Support semicolon-delimited CSV commonly exported by Indonesian Excel
+    if (isCsv && matrix.length > 0 && matrix[0].length === 1 && String(matrix[0][0] ?? '').includes(';')) {
+      const text = buffer.toString('utf8').replace(/^\ufeff/, '');
+      wb = excel.read(text, { type: 'string', FS: ';', cellDates: true });
+      sheetName = wb.SheetNames[0];
+      sheet = wb.Sheets[sheetName];
+      matrix = excel.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as unknown[][];
+    }
+
+    if (!matrix || matrix.length < 2) {
+      return { success: false, error: 'File tidak memiliki baris data yang dapat diimpor.' };
+    }
+
+    const headerAliases = new Set([
+      'short name',
+      'shortname',
+      'nama cluster',
+      'cluster name',
+      'clustername',
+      'cluster id',
+      'clusterid',
+      'emr site code',
+      'emr code',
+      'subfeeder id',
+    ]);
+
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(10, matrix.length); i++) {
+      const row = matrix[i] || [];
+      const hasKnownHeader = row.some((cell) => headerAliases.has(normalizeSitelistHeader(cell)));
+      if (hasKnownHeader) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+
+    const rawHeaders = (matrix[headerRowIdx] || []).map((c) => String(c ?? '').trim());
+    const normalizedHeaders = rawHeaders.map((h) => normalizeSitelistHeader(h));
+
+    const findColIndex = (candidates: string[]) =>
+      normalizedHeaders.findIndex((h) => candidates.includes(h));
+
+    const colIdx = {
+      emrSiteCode: findColIndex(['emr site code', 'emr code', 'site code', 'emr']),
+      subfeederId: findColIndex(['subfeeder id', 'subfeeder', 'sf id']),
+      clusterId: findColIndex(['cluster id', 'clusterid', 'kode cluster', 'code']),
+      clusterName: findColIndex(['cluster name', 'clustername', 'nama lengkap', 'site name']),
+      shortName: findColIndex(['short name', 'shortname', 'nama cluster', 'nama pendek', 'cluster']),
+      oltName: findColIndex(['olt name', 'olt', 'nama olt']),
+      kota: findColIndex(['kota', 'kebupaten', 'kabupaten', 'kab kota', 'kabupaten kota', 'city', 'wilayah', 'area']),
+      startImpleDate: findColIndex(['start imple date', 'start date', 'tanggal mulai', 'mulai imple', 'start imple']),
+      homePasses: findColIndex(['home passes', 'home pass', 'homepasses', 'homepass', 'hp']),
+      projectType: findColIndex(['project type', 'kategori', 'scope', 'tipe', 'type']),
+    };
+
+    if (colIdx.shortName === -1 && colIdx.clusterName === -1 && colIdx.clusterId === -1) {
+      return {
+        success: false,
+        error:
+          'Header kolom tidak dikenali. Pastikan file memiliki minimal kolom "Short Name" / "Cluster Name" / "Cluster ID".',
+      };
+    }
+
+    const existingClusters = await prisma.cluster.findMany({
+      select: { id: true, name: true, code: true, emrSiteCode: true },
+    });
+
+    const rowMap = new Map<string, ParsedSitelistImportRow>();
+    let skippedCount = 0;
+
+    for (let r = headerRowIdx + 1; r < matrix.length; r++) {
+      const cells = matrix[r] || [];
+      const getVal = (idx: number) => (idx >= 0 ? cells[idx] : '');
+      const getStr = (idx: number) => String(getVal(idx) ?? '').trim();
+
+      const rawShort = getStr(colIdx.shortName);
+      const rawClusterName = getStr(colIdx.clusterName);
+      const rawClusterId = getStr(colIdx.clusterId);
+      const shortName = deriveShortName(rawShort, rawClusterName, rawClusterId);
+
+      if (!shortName) {
+        skippedCount++;
+        continue;
+      }
+
+      const emrSiteCode = getStr(colIdx.emrSiteCode) || '-';
+      const subfeederId = getStr(colIdx.subfeederId) || `SF-${shortName}`;
+      const clusterId = rawClusterId || `CLR-${shortName}`;
+      const clusterName = (rawClusterName || shortName).toUpperCase();
+      const oltName = getStr(colIdx.oltName) || 'OLT';
+      const kota = getStr(colIdx.kota);
+      const startImpleDate = formatExcelOrStringDate(getVal(colIdx.startImpleDate));
+      const rawHp = Number(String(getVal(colIdx.homePasses) ?? '0').replace(/[^\d.-]/g, ''));
+      const homePasses = Number.isFinite(rawHp) && rawHp > 0 ? Math.round(rawHp) : 0;
+
+      const rawType = getStr(colIdx.projectType).toUpperCase();
+      const projectType: 'CLUSTER_SF' | 'MAIN_FEEDER' =
+        rawType.includes('MAIN') ||
+        rawType === 'MF' ||
+        shortName.startsWith('MF ') ||
+        shortName.startsWith('MF-') ||
+        shortName.startsWith('MF_')
+          ? 'MAIN_FEEDER'
+          : 'CLUSTER_SF';
+
+      const matched = existingClusters.find((c) => {
+        const cName = c.name.trim().toLowerCase();
+        const cCode = (c.code || '').trim().toLowerCase();
+        const cEmr = (c.emrSiteCode || '').trim().toLowerCase();
+        return (
+          cName === shortName.toLowerCase() ||
+          (clusterId && cCode === clusterId.toLowerCase()) ||
+          (emrSiteCode !== '-' && cEmr === emrSiteCode.toLowerCase())
+        );
+      });
+
+      rowMap.set(shortName, {
+        rowNumber: r + 1,
+        emrSiteCode,
+        subfeederId,
+        clusterId,
+        clusterName,
+        shortName,
+        oltName,
+        kota,
+        startImpleDate,
+        homePasses,
+        projectType,
+        existsInDb: Boolean(matched),
+        existingClusterId: matched?.id ?? null,
+      });
+    }
+
+    const rows = Array.from(rowMap.values());
+    if (rows.length === 0) {
+      return { success: false, error: 'Tidak ada baris cluster valid yang ditemukan di file.' };
+    }
+
+    return {
+      success: true,
+      sheetName,
+      rows,
+      skippedCount,
+      detectedColumns: rawHeaders.filter(Boolean),
+    };
+  } catch (error: unknown) {
+    console.error('Error parsing sitelist file:', error);
+    const errMsg = error instanceof Error ? error.message : 'Gagal membaca file Excel / CSV.';
+    return { success: false, error: errMsg };
+  }
+}
+
+export async function commitSitelistImport(input: {
+  rows: ParsedSitelistImportRow[];
+  updateExisting: boolean;
+  defaultKota?: string;
+}) {
+  try {
+    if (!input.rows || input.rows.length === 0) {
+      return { success: false, error: 'Tidak ada data sitelist untuk diimpor.' };
+    }
+
+    await ensureDatabaseRestoredFromNextcloud();
+
+    let project = await prisma.project.findFirst();
+    if (!project) {
+      project = await prisma.project.create({
+        data: {
+          code: 'BLA-KEDUNGTUBAN',
+          name: 'GCI',
+          description: 'Proyek FTTH Rollout GCI',
+        },
+      });
+    }
+
+    const existingClusters = await prisma.cluster.findMany({
+      where: { projectId: project.id },
+    });
+
+    const fallbackKota = input.defaultKota?.trim() || 'Blora';
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+
+    for (const row of input.rows) {
+      const shortName = row.shortName.trim().toUpperCase();
+      if (!shortName) {
+        skippedCount++;
+        continue;
+      }
+
+      const existing = existingClusters.find((c) => {
+        if (row.existingClusterId && c.id === row.existingClusterId) return true;
+        return (
+          c.name.trim().toLowerCase() === shortName.toLowerCase() ||
+          (row.clusterId && (c.code || '').trim().toLowerCase() === row.clusterId.toLowerCase())
+        );
+      });
+
+      const resolvedKota = row.kota.trim() || fallbackKota;
+      const resolvedStartDate = row.startImpleDate.trim()
+        ? formatCanonicalReportDate(row.startImpleDate.trim())
+        : null;
+      const normalizedProjectType =
+        row.projectType === 'MAIN_FEEDER' ? 'MAIN_FEEDER' : 'CLUSTER_SF';
+
+      if (existing) {
+        if (!input.updateExisting) {
+          skippedCount++;
+          continue;
+        }
+
+        await prisma.cluster.update({
+          where: { id: existing.id },
+          data: {
+            code: row.clusterId.trim() || existing.code,
+            emrSiteCode: row.emrSiteCode.trim() && row.emrSiteCode !== '-' ? row.emrSiteCode.trim() : existing.emrSiteCode,
+            subfeederId: row.subfeederId.trim() || existing.subfeederId,
+            clusterName: row.clusterName.trim().toUpperCase() || existing.clusterName,
+            oltName: row.oltName.trim() || existing.oltName,
+            kabupaten: resolvedKota,
+            startImpleDate: resolvedStartDate || existing.startImpleDate,
+            homePasses: row.homePasses > 0 ? row.homePasses : existing.homePasses,
+            projectType: normalizedProjectType,
+          },
+        });
+        updatedCount++;
+      } else {
+        const created = await prisma.cluster.create({
+          data: {
+            projectId: project.id,
+            name: shortName,
+            code: row.clusterId.trim() || `CLR-${shortName}`,
+            emrSiteCode: row.emrSiteCode.trim() || '-',
+            subfeederId: row.subfeederId.trim() || `SF-${shortName}`,
+            clusterName: row.clusterName.trim().toUpperCase() || shortName,
+            oltName: row.oltName.trim() || 'OLT',
+            kecamatan: '-',
+            kabupaten: resolvedKota,
+            startImpleDate: resolvedStartDate,
+            homePasses: row.homePasses || 0,
+            projectType: normalizedProjectType,
+          },
+        });
+
+        const templateItems =
+          normalizedProjectType === 'MAIN_FEEDER'
+            ? DEFAULT_MAIN_FEEDER_WORK_ITEMS
+            : DEFAULT_WORK_ITEMS;
+
+        for (const wi of templateItems) {
+          await prisma.workItem.create({
+            data: {
+              clusterId: created.id,
+              scope: wi.scope,
+              workType: wi.workType,
+              category: wi.category,
+              subCategory: wi.subCategory,
+              weight: wi.weight,
+              itemName: wi.itemName,
+              unit: wi.unit,
+              boq: 0,
+              status: 'ONGOING',
+              sortOrder: wi.sortOrder,
+            },
+          });
+        }
+
+        existingClusters.push(created);
+        createdCount++;
+      }
+    }
+
+    await backupDatabaseToNextcloud();
+
+    revalidatePath('/');
+    revalidatePath('/sitelist');
+    revalidatePath('/clusters');
+    revalidatePath('/daily-input');
+    revalidatePath('/matrix');
+
+    const parts: string[] = [];
+    if (createdCount > 0) parts.push(`${createdCount} cluster baru ditambahkan`);
+    if (updatedCount > 0) parts.push(`${updatedCount} cluster diperbarui`);
+    if (skippedCount > 0) parts.push(`${skippedCount} dilewati`);
+
+    return {
+      success: true,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      message: `Impor Sitelist selesai: ${parts.join(', ') || 'tidak ada perubahan'}.`,
+    };
+  } catch (error: unknown) {
+    console.error('Error committing sitelist import:', error);
+    const errMsg = error instanceof Error ? error.message : 'Gagal menyimpan impor sitelist.';
     return { success: false, error: errMsg };
   }
 }

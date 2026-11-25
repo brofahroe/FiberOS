@@ -6,9 +6,12 @@ import Link from 'next/link';
 import {
   SitelistEntry,
   RegionSummaryItem,
+  ParsedSitelistImportRow,
   createOrActivateSitelistCluster,
   activateAllSitelistClusters,
   deactivateSitelistCluster,
+  parseSitelistFile,
+  commitSitelistImport,
 } from '@/actions/sitelist';
 import {
   MapPin,
@@ -29,6 +32,9 @@ import {
   Cable,
   Box,
   Cpu,
+  Upload,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 
 export default function SitelistClient({
@@ -75,6 +81,17 @@ export default function SitelistClient({
   const [formHomePasses, setFormHomePasses] = useState<string>('0');
   const [formProjectType, setFormProjectType] = useState<'CLUSTER_SF' | 'MAIN_FEEDER'>('CLUSTER_SF');
   const [formIsActive, setFormIsActive] = useState<boolean>(true);
+
+  // Import Excel / CSV Modal state
+  const [showImportModal, setShowImportModal] = useState<boolean>(false);
+  const [parsingImport, setParsingImport] = useState<boolean>(false);
+  const [committingImport, setCommittingImport] = useState<boolean>(false);
+  const [importFilename, setImportFilename] = useState<string>('');
+  const [importRows, setImportRows] = useState<ParsedSitelistImportRow[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSkippedCount, setImportSkippedCount] = useState<number>(0);
+  const [importUpdateExisting, setImportUpdateExisting] = useState<boolean>(true);
+  const [importDefaultKota, setImportDefaultKota] = useState<string>('Blora');
 
   const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const toDdMmmYyFromIso = (iso: string) => {
@@ -298,6 +315,84 @@ export default function SitelistClient({
     }
   };
 
+  const openImportModal = () => {
+    setImportFilename('');
+    setImportRows([]);
+    setImportError(null);
+    setImportSkippedCount(0);
+    setImportUpdateExisting(true);
+    setImportDefaultKota(selectedKabupaten !== 'ALL' ? selectedKabupaten : 'Blora');
+    setShowImportModal(true);
+  };
+
+  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setParsingImport(true);
+    setImportError(null);
+    setImportRows([]);
+    setImportFilename(file.name);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = (event.target?.result as string)?.split(',')[1] || '';
+      const res = await parseSitelistFile(base64, file.name);
+      setParsingImport(false);
+
+      if (res.success && res.rows) {
+        setImportRows(res.rows);
+        setImportSkippedCount(res.skippedCount || 0);
+      } else {
+        setImportError(res.error || 'Gagal membaca file Excel / CSV.');
+      }
+    };
+    reader.onerror = () => {
+      setParsingImport(false);
+      setImportError('Gagal membaca file dari perangkat.');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleDownloadCsvTemplate = () => {
+    const csvLines = [
+      'EMR Site Code,Subfeeder ID,Cluster ID,Cluster Name,Short Name,OLT Name,Kota,Start Imple Date,Home Passes,Kategori',
+      'SMG000001,SFM01-01-001,CLRM01-01-001,KELURAHAN BANYUMANIK SEMARANG,BANYUMANIK,OLT Banyumanik,Semarang,01-Dec-26,650,CLUSTER_SF',
+      'MF000001,MF-SMG-01,MF-SMG-01,MF BANYUMANIK TO TEMBALANG,MF_BNM_TO_TMG,OLT Banyumanik,Semarang,01-Dec-26,0,MAIN_FEEDER',
+    ];
+    const blob = new Blob(['\ufeff' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Template_Import_Sitelist_FiberOS.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCommitImport = async () => {
+    if (importRows.length === 0) return;
+
+    setCommittingImport(true);
+    setImportError(null);
+    const res = await commitSitelistImport({
+      rows: importRows,
+      updateExisting: importUpdateExisting,
+      defaultKota: importDefaultKota,
+    });
+    setCommittingImport(false);
+
+    if (res.success) {
+      setShowImportModal(false);
+      setFeedback({ type: 'success', text: res.message || 'Impor Sitelist berhasil!' });
+      router.refresh();
+    } else {
+      setImportError(res.error || 'Gagal menyimpan data impor sitelist.');
+    }
+  };
+
   const displayedSummaries = kabupatenSummaries;
 
   const activeRegionLabel =
@@ -340,6 +435,15 @@ export default function SitelistClient({
               </span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={openImportModal}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Impor Excel / CSV</span>
+          </button>
 
           <button
             type="button"
@@ -1162,6 +1266,238 @@ export default function SitelistClient({
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Import Sitelist Excel / CSV */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-4xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Impor Master Sitelist dari Excel / CSV
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Mendukung format .xlsx, .xls, dan .csv (pemisah koma atau titik koma).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-200/60 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto text-xs flex-1">
+              {importError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="md:col-span-2">
+                  <label className="font-bold text-slate-700 block mb-1.5">
+                    Pilih File Excel / CSV <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm">
+                      {parsingImport ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      <span>{parsingImport ? 'Membaca File...' : 'Pilih File (.xlsx / .csv)'}</span>
+                      <input
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={handleImportFileChange}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleDownloadCsvTemplate}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl font-bold transition"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Unduh Template CSV</span>
+                    </button>
+                    {importFilename && (
+                      <span className="text-[11px] font-mono text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200 truncate max-w-[220px]">
+                        {importFilename}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1.5">
+                    Kota Default (Jika kolom Kota kosong)
+                  </label>
+                  <input
+                    type="text"
+                    value={importDefaultKota}
+                    onChange={(e) => setImportDefaultKota(e.target.value)}
+                    placeholder="Contoh: Blora / Semarang"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="text-[11px] text-slate-500 bg-blue-50/70 border border-blue-200 rounded-xl px-3.5 py-2.5 leading-relaxed">
+                <strong className="text-blue-800">Kolom yang didukung:</strong>{' '}
+                <code>Short Name</code> (wajib), <code>Cluster ID</code>, <code>Subfeeder ID</code>,{' '}
+                <code>EMR Site Code</code>, <code>Cluster Name</code>, <code>OLT Name</code>,{' '}
+                <code>Kota</code> (atau <code>Kabupaten</code>), <code>Start Imple Date</code>,{' '}
+                <code>Home Passes</code> (<code>HP</code>), dan <code>Kategori</code> (<code>CLUSTER_SF</code> / <code>MAIN_FEEDER</code>).
+              </div>
+
+              {importRows.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 font-bold">
+                        Total: {importRows.length} Site
+                      </span>
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                        Baru: {importRows.filter((r) => !r.existsInDb).length}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-bold">
+                        Sudah Ada: {importRows.filter((r) => r.existsInDb).length}
+                      </span>
+                      {importSkippedCount > 0 && (
+                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-medium">
+                          Baris kosong dilewati: {importSkippedCount}
+                        </span>
+                      )}
+                    </div>
+
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none text-slate-700 font-semibold">
+                      <input
+                        type="checkbox"
+                        checked={importUpdateExisting}
+                        onChange={(e) => setImportUpdateExisting(e.target.checked)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>Perbarui metadata cluster yang sudah ada (BOQ &amp; progres aman)</span>
+                    </label>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="max-h-72 overflow-auto">
+                      <table className="w-full text-left text-[11px] border-collapse">
+                        <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
+                          <tr>
+                            <th className="px-2.5 py-2 text-center w-10">No</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">Status</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">Short Name</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">Cluster ID</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">Subfeeder ID</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">EMR Code</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">OLT Name</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">Kota</th>
+                            <th className="px-2.5 py-2 text-right whitespace-nowrap">HP</th>
+                            <th className="px-2.5 py-2 whitespace-nowrap">Kategori</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700">
+                          {importRows.map((row, i) => (
+                            <tr key={`${row.shortName}-${i}`} className="hover:bg-slate-50">
+                              <td className="px-2.5 py-1.5 text-center text-slate-400">{i + 1}</td>
+                              <td className="px-2.5 py-1.5 whitespace-nowrap">
+                                {row.existsInDb ? (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      importUpdateExisting
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-slate-100 text-slate-500'
+                                    }`}
+                                  >
+                                    {importUpdateExisting ? 'Update' : 'Lewati'}
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    Baru
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-2.5 py-1.5 font-extrabold text-slate-900 whitespace-nowrap">
+                                {row.shortName}
+                              </td>
+                              <td className="px-2.5 py-1.5 font-mono text-blue-700 whitespace-nowrap">
+                                {row.clusterId}
+                              </td>
+                              <td className="px-2.5 py-1.5 font-mono text-slate-600 whitespace-nowrap">
+                                {row.subfeederId}
+                              </td>
+                              <td className="px-2.5 py-1.5 font-mono text-slate-600 whitespace-nowrap">
+                                {row.emrSiteCode}
+                              </td>
+                              <td className="px-2.5 py-1.5 whitespace-nowrap">{row.oltName}</td>
+                              <td className="px-2.5 py-1.5 whitespace-nowrap font-semibold">
+                                {row.kota || importDefaultKota.trim() || 'Blora'}
+                              </td>
+                              <td className="px-2.5 py-1.5 text-right whitespace-nowrap tabular-nums">
+                                {row.homePasses}
+                              </td>
+                              <td className="px-2.5 py-1.5 whitespace-nowrap">
+                                {row.projectType === 'MAIN_FEEDER' ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold text-[10px]">
+                                    MF 100%
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-bold text-[10px]">
+                                    Cluster+SF
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/60 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={importRows.length === 0 || committingImport}
+                onClick={handleCommitImport}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 transition disabled:opacity-50"
+              >
+                {committingImport ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                <span>
+                  {committingImport
+                    ? 'Menyimpan...'
+                    : `Impor ${importRows.length} Data ke Sitelist`}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
