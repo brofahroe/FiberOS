@@ -361,9 +361,6 @@ export const DEFAULT_BOQ_WORK_ITEMS = [
   { scope: 'CLUSTER', workType: 'CW', category: 'SELING', subCategory: 'ACC', weight: 10, itemName: 'Seling', unit: 'Meter', sortOrder: 5001 },
   { scope: 'SUBFEEDER', workType: 'CW', category: 'POLE', subCategory: 'POLE', weight: 50, itemName: 'Pole 7m "4"', unit: 'Btg', sortOrder: 10003 },
   { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 48c', unit: 'Meter', sortOrder: 11048 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 96c', unit: 'Meter', sortOrder: 11096 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 144c', unit: 'Meter', sortOrder: 11144 },
-  { scope: 'SUBFEEDER', workType: 'CW', category: 'CABLE', subCategory: 'CABLE', weight: 20, itemName: 'Kabel 288c', unit: 'Meter', sortOrder: 11288 },
   { scope: 'SUBFEEDER', workType: 'EL', category: 'JC', subCategory: 'JC', weight: 20, itemName: 'Joint Closure (JC)', unit: 'Pcs', sortOrder: 14001 },
 ] as const;
 

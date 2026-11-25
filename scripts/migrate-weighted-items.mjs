@@ -213,18 +213,10 @@ async function main() {
         scope = 'SUBFEEDER';
       }
 
-      if (!isMainFeeder && item.scope === 'CLUSTER' && SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
-        const hasSfSibling = cluster.workItems.some(
-          (other) =>
-            other.id !== item.id &&
-            other.scope === 'SUBFEEDER' &&
-            other.itemName.trim().toLowerCase() === trimmedLower
-        );
-        if (hasSfSibling || (item.boq === 0 && item.progressList.length === 0)) {
-          if (item.progressList.length === 0) {
-            await prisma.workItem.delete({ where: { id: item.id } });
-            continue;
-          }
+      if (!isMainFeeder && SUBFEEDER_ONLY_CABLES.has(trimmedLower)) {
+        if (item.boq === 0 && item.progressList.length === 0) {
+          await prisma.workItem.delete({ where: { id: item.id } });
+          continue;
         }
       }
 
@@ -320,29 +312,9 @@ async function main() {
           category: 'CABLE',
           subCategory: 'CABLE',
           weight: 20,
-          itemName: 'Kabel 96c',
+          itemName: 'Kabel 48c',
           unit: 'Meter',
-          sortOrder: 102,
-        },
-        {
-          scope: 'SUBFEEDER',
-          workType: 'CW',
-          category: 'CABLE',
-          subCategory: 'CABLE',
-          weight: 20,
-          itemName: 'Kabel 144c',
-          unit: 'Meter',
-          sortOrder: 103,
-        },
-        {
-          scope: 'SUBFEEDER',
-          workType: 'CW',
-          category: 'CABLE',
-          subCategory: 'CABLE',
-          weight: 20,
-          itemName: 'Kabel 288c',
-          unit: 'Meter',
-          sortOrder: 104,
+          sortOrder: 11048,
         },
       ];
 
