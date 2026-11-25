@@ -134,7 +134,6 @@ export default function DashboardSummaryClient({
   clusters: ClusterWithProgress[];
 }) {
   const [selectedKabupaten, setSelectedKabupaten] = useState<string>('ALL');
-  const [selectedKecamatan, setSelectedKecamatan] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [projectTypeFilter, setProjectTypeFilter] = useState<'ALL' | 'CLUSTER_SF' | 'MAIN_FEEDER'>('ALL');
   const [viewMode, setViewMode] = useState<'TABLE' | 'CARD'>('TABLE');
@@ -147,23 +146,13 @@ export default function DashboardSummaryClient({
     return Array.from(set).sort();
   }, [clusters]);
 
-  const kecamatanOptions = useMemo(() => {
-    const set = new Set<string>(['Kedungtuban', 'Cepu']);
-    clusters.forEach((c) => {
-      if (c.kecamatan) set.add(c.kecamatan);
-    });
-    return Array.from(set).sort();
-  }, [clusters]);
-
   const filteredClusters = useMemo(() => {
     return clusters.filter((c) => {
       const kab = c.kabupaten || 'Blora';
-      const kec = c.kecamatan || 'Kedungtuban';
       if (selectedKabupaten !== 'ALL' && kab !== selectedKabupaten) return false;
-      if (selectedKecamatan !== 'ALL' && kec !== selectedKecamatan) return false;
       return true;
     });
-  }, [clusters, selectedKabupaten, selectedKecamatan]);
+  }, [clusters, selectedKabupaten]);
 
   // Recalculate KPI and Category metrics for filtered clusters
   const dynamicStats = useMemo(() => {
@@ -220,7 +209,7 @@ export default function DashboardSummaryClient({
         c.name.toLowerCase().includes(q) ||
         (c.clusterName || '').toLowerCase().includes(q) ||
         (c.code || '').toLowerCase().includes(q) ||
-        (c.kecamatan || '').toLowerCase().includes(q) ||
+        (c.kabupaten || '').toLowerCase().includes(q) ||
         (c.oltName || '').toLowerCase().includes(q) ||
         teamText.includes(q)
       );
@@ -425,9 +414,9 @@ export default function DashboardSummaryClient({
                   Main Feeder (100%)
                 </span>
               )}
-              {cluster.kecamatan && (
+              {cluster.kabupaten && (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 shrink-0">
-                  Kec. {cluster.kecamatan}
+                  Kota {cluster.kabupaten}
                 </span>
               )}
             </div>
@@ -654,10 +643,8 @@ export default function DashboardSummaryClient({
   };
 
   const activeRegionText =
-    selectedKecamatan !== 'ALL'
-      ? `Kecamatan ${selectedKecamatan} (${selectedKabupaten !== 'ALL' ? `Kab. ${selectedKabupaten}` : 'Kab. Blora'})`
-      : selectedKabupaten !== 'ALL'
-      ? `Kabupaten ${selectedKabupaten}`
+    selectedKabupaten !== 'ALL'
+      ? `Kota ${selectedKabupaten}`
       : `${project.name} (Semua Wilayah)`;
 
   return (
@@ -672,12 +659,11 @@ export default function DashboardSummaryClient({
             <span className="text-xs sm:text-sm font-bold text-slate-900 truncate">
               {activeRegionText}
             </span>
-            {(selectedKecamatan !== 'ALL' || selectedKabupaten !== 'ALL') && (
+            {selectedKabupaten !== 'ALL' && (
               <button
                 type="button"
                 onClick={() => {
                   setSelectedKabupaten('ALL');
-                  setSelectedKecamatan('ALL');
                 }}
                 className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline shrink-0"
               >
@@ -692,27 +678,13 @@ export default function DashboardSummaryClient({
           <select
             value={selectedKabupaten}
             onChange={(e) => setSelectedKabupaten(e.target.value)}
-            aria-label="Filter Kabupaten"
+            aria-label="Filter Kota"
             className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="ALL">Semua Kabupaten</option>
-            {kabupatenOptions.map((kab) => (
-              <option key={kab} value={kab}>
-                Kab. {kab}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedKecamatan}
-            onChange={(e) => setSelectedKecamatan(e.target.value)}
-            aria-label="Filter Kecamatan"
-            className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="ALL">Semua Kecamatan</option>
-            {kecamatanOptions.map((kec) => (
-              <option key={kec} value={kec}>
-                Kec. {kec}
+            <option value="ALL">Semua Kota</option>
+            {kabupatenOptions.map((kota) => (
+              <option key={kota} value={kota}>
+                Kota {kota}
               </option>
             ))}
           </select>
@@ -733,7 +705,7 @@ export default function DashboardSummaryClient({
               {dynamicStats.overallProgress}%
             </span>
             <span className="text-xs text-slate-500">
-              {selectedKecamatan !== 'ALL' ? `Kec. ${selectedKecamatan}` : 'keseluruhan'}
+              {selectedKabupaten !== 'ALL' ? `Kota ${selectedKabupaten}` : 'keseluruhan'}
             </span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2 mt-3 overflow-hidden">
@@ -783,10 +755,8 @@ export default function DashboardSummaryClient({
             )}
           </div>
           <p className="text-xs text-slate-400 mt-2">
-            {selectedKecamatan !== 'ALL'
-              ? `Wilayah Kec. ${selectedKecamatan}`
-              : selectedKabupaten !== 'ALL'
-              ? `Wilayah Kab. ${selectedKabupaten}`
+            {selectedKabupaten !== 'ALL'
+              ? `Wilayah Kota ${selectedKabupaten}`
               : `${dynamicStats.totalClusters} total area (${regionCounts.clusterCount} Cluster, ${regionCounts.mainFeederCount} MF)`}
           </p>
         </div>
@@ -899,7 +869,7 @@ export default function DashboardSummaryClient({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari nama cluster / Main Feeder, OLT, kecamatan, atau tim pelaksana..."
+            placeholder="Cari nama cluster / Main Feeder, OLT, kota, atau tim pelaksana..."
             className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {searchQuery && (
@@ -1072,7 +1042,7 @@ export default function DashboardSummaryClient({
                                   {cluster.name}
                                 </Link>
                                 <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap gap-x-1.5">
-                                  {cluster.kecamatan && <span>Kec. {cluster.kecamatan}</span>}
+                                  {cluster.kabupaten && <span>Kota {cluster.kabupaten}</span>}
                                   {cluster.oltName && <span>• {cluster.oltName}</span>}
                                   <span>• HP: {cluster.homePasses || '-'}</span>
                                 </div>
@@ -1312,7 +1282,7 @@ export default function DashboardSummaryClient({
                                   </span>
                                 </div>
                                 <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap gap-x-1.5">
-                                  {cluster.kecamatan && <span>Kec. {cluster.kecamatan}</span>}
+                                  {cluster.kabupaten && <span>Kota {cluster.kabupaten}</span>}
                                   {cluster.oltName && <span>• {cluster.oltName}</span>}
                                   {cluster.code && <span>• {cluster.code}</span>}
                                 </div>

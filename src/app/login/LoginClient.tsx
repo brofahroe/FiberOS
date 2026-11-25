@@ -63,7 +63,7 @@ export default function LoginClient({ redirectTo }: { redirectTo?: string }) {
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            GCI-MTI Blora Rollout • Silakan login untuk melanjutkan
+            GCI Rollout • Silakan login untuk melanjutkan
           </p>
         </div>
 

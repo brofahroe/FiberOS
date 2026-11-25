@@ -62,7 +62,7 @@ export default function Navbar({ currentUser }: { currentUser: SessionUser | nul
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium -mt-1">
-                GCI-MTI Blora Rollout
+                GCI Rollout
               </p>
             </div>
           </Link>

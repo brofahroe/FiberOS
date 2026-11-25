@@ -33,25 +33,20 @@ import {
 
 export default function SitelistClient({
   initialEntries,
-  kecamatanSummaries,
   kabupatenSummaries,
-  kecamatanList,
   kabupatenList,
   oltList,
 }: {
   initialEntries: SitelistEntry[];
-  kecamatanSummaries: RegionSummaryItem[];
+  kecamatanSummaries?: RegionSummaryItem[];
   kabupatenSummaries: RegionSummaryItem[];
-  kecamatanList: string[];
+  kecamatanList?: string[];
   kabupatenList: string[];
   oltList: string[];
 }) {
   const router = useRouter();
 
-  // Summary grouping mode: KECAMATAN vs KABUPATEN
-  const [summaryMode, setSummaryMode] = useState<'KECAMATAN' | 'KABUPATEN'>('KECAMATAN');
   const [selectedKabupaten, setSelectedKabupaten] = useState<string>('ALL');
-  const [selectedKecamatan, setSelectedKecamatan] = useState<string>('ALL');
   const [selectedOlt, setSelectedOlt] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'UNPROVISIONED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'CLUSTER_SF' | 'MAIN_FEEDER'>('ALL');
@@ -94,7 +89,6 @@ export default function SitelistClient({
     const q = searchQuery.trim().toLowerCase();
     return initialEntries.filter((entry) => {
       if (selectedKabupaten !== 'ALL' && entry.kabupaten !== selectedKabupaten) return false;
-      if (selectedKecamatan !== 'ALL' && entry.kecamatan !== selectedKecamatan) return false;
       if (selectedOlt !== 'ALL' && entry.oltName !== selectedOlt) return false;
       if (statusFilter === 'ACTIVE' && !entry.isProvisioned) return false;
       if (statusFilter === 'UNPROVISIONED' && entry.isProvisioned) return false;
@@ -108,15 +102,14 @@ export default function SitelistClient({
           entry.subfeederId.toLowerCase().includes(q) ||
           entry.emrSiteCode.toLowerCase().includes(q) ||
           entry.oltName.toLowerCase().includes(q) ||
-          entry.kecamatan.toLowerCase().includes(q) ||
           entry.kabupaten.toLowerCase().includes(q);
         if (!match) return false;
       }
       return true;
     });
-  }, [initialEntries, selectedKabupaten, selectedKecamatan, selectedOlt, statusFilter, categoryFilter, searchQuery]);
+  }, [initialEntries, selectedKabupaten, selectedOlt, statusFilter, categoryFilter, searchQuery]);
 
-  // Dynamic KPI Summary for currently selected Kecamatan / Kabupaten filter
+  // Dynamic KPI Summary for currently selected Kota filter
   const currentFilterStats = useMemo(() => {
     const totalSites = filteredEntries.length;
     const activeList = filteredEntries.filter((e) => e.isProvisioned);
@@ -168,7 +161,7 @@ export default function SitelistClient({
     setFormClusterName('');
     setFormShortName('');
     setFormOltName('OLT Balun');
-    setFormKecamatan(selectedKecamatan !== 'ALL' ? selectedKecamatan : 'Kedungtuban');
+    setFormKecamatan('Kedungtuban');
     setFormKabupaten(selectedKabupaten !== 'ALL' ? selectedKabupaten : 'Blora');
     setFormStartImpleDate('');
     setFormHomePasses('0');
@@ -251,12 +244,12 @@ export default function SitelistClient({
 
   const handleActivateAll = async () => {
     const scopeLabel =
-      selectedKecamatan !== 'ALL' ? `Kecamatan ${selectedKecamatan}` : 'seluruh Sitelist';
+      selectedKabupaten !== 'ALL' ? `Kota ${selectedKabupaten}` : 'seluruh Sitelist';
     if (!confirm(`Aktifkan semua cluster yang belum terdaftar pada ${scopeLabel}?`)) return;
 
     setActivatingAll(true);
     setFeedback(null);
-    const res = await activateAllSitelistClusters(selectedKecamatan);
+    const res = await activateAllSitelistClusters('ALL');
     setActivatingAll(false);
 
     if (res.success) {
@@ -305,15 +298,12 @@ export default function SitelistClient({
     }
   };
 
-  const displayedSummaries =
-    summaryMode === 'KECAMATAN' ? kecamatanSummaries : kabupatenSummaries;
+  const displayedSummaries = kabupatenSummaries;
 
   const activeRegionLabel =
-    selectedKecamatan !== 'ALL'
-      ? `Kecamatan ${selectedKecamatan} (${selectedKabupaten !== 'ALL' ? selectedKabupaten : 'Kab. Blora'})`
-      : selectedKabupaten !== 'ALL'
-      ? `Kabupaten ${selectedKabupaten}`
-      : 'Semua Wilayah (Kabupaten & Kecamatan)';
+    selectedKabupaten !== 'ALL'
+      ? `Kota ${selectedKabupaten}`
+      : 'Semua Wilayah (Kota)';
 
   return (
     <div className="space-y-6">
@@ -328,7 +318,7 @@ export default function SitelistClient({
             Master Sitelist & Summary Wilayah
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Daftar resmi EMR Site Code, Subfeeder ID, Cluster ID, OLT, serta ringkasan progres per Kecamatan & Kabupaten.
+            Daftar resmi EMR Site Code, Subfeeder ID, Cluster ID, OLT, serta ringkasan progres per Kota.
           </p>
         </div>
 
@@ -389,50 +379,17 @@ export default function SitelistClient({
         </div>
       )}
 
-      {/* SECTION 1: Summary Selector (Per Kecamatan vs Per Kabupaten) */}
+      {/* SECTION 1: Summary Selector (Per Kota) */}
       <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-100">
           <div>
             <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <Building2 className="w-5 h-5 text-blue-600" />
-              <span>Summary Progres Wilayah ({summaryMode === 'KECAMATAN' ? 'Per Kecamatan' : 'Per Kabupaten'})</span>
+              <span>Summary Progres Wilayah (Per Kota)</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Klik kartu Kecamatan atau Kabupaten di bawah untuk memfilter ringkasan dan tabel Sitelist.
+              Klik kartu Kota di bawah untuk memfilter ringkasan dan tabel Sitelist.
             </p>
-          </div>
-
-          {/* Toggle Per Kecamatan / Per Kabupaten */}
-          <div className="inline-flex p-1 bg-slate-100 rounded-xl self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => {
-                setSummaryMode('KECAMATAN');
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                summaryMode === 'KECAMATAN'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <MapPin className="w-3.5 h-3.5" />
-              <span>Per Kecamatan</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSummaryMode('KABUPATEN');
-                setSelectedKecamatan('ALL');
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-                summaryMode === 'KABUPATEN'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5" />
-              <span>Per Kabupaten</span>
-            </button>
           </div>
         </div>
 
@@ -442,10 +399,9 @@ export default function SitelistClient({
           <div
             onClick={() => {
               setSelectedKabupaten('ALL');
-              setSelectedKecamatan('ALL');
             }}
             className={`p-4 rounded-2xl border cursor-pointer transition ${
-              selectedKabupaten === 'ALL' && selectedKecamatan === 'ALL'
+              selectedKabupaten === 'ALL'
                 ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-500/20 shadow-sm'
                 : 'bg-slate-50/60 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
             }`}
@@ -459,7 +415,7 @@ export default function SitelistClient({
                   Semua Wilayah ({initialEntries.length} Site)
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  {kecamatanList.length} Kecamatan • {kabupatenList.length} Kabupaten
+                  {kabupatenList.length} Kota
                 </p>
               </div>
               <div className="text-right">
@@ -498,28 +454,17 @@ export default function SitelistClient({
             </div>
           </div>
 
-          {/* Cards per Kecamatan or Kabupaten */}
+          {/* Cards per Kota */}
           {displayedSummaries.map((reg) => {
-            const isSelected =
-              summaryMode === 'KECAMATAN'
-                ? selectedKecamatan === reg.regionName
-                : selectedKabupaten === reg.regionName && selectedKecamatan === 'ALL';
+            const isSelected = selectedKabupaten === reg.regionName;
 
             return (
               <div
                 key={`${reg.regionType}-${reg.regionName}`}
                 onClick={() => {
-                  if (summaryMode === 'KECAMATAN') {
-                    setSelectedKecamatan(
-                      selectedKecamatan === reg.regionName ? 'ALL' : reg.regionName
-                    );
-                    if (reg.parentKabupaten) setSelectedKabupaten(reg.parentKabupaten);
-                  } else {
-                    setSelectedKabupaten(
-                      selectedKabupaten === reg.regionName ? 'ALL' : reg.regionName
-                    );
-                    setSelectedKecamatan('ALL');
-                  }
+                  setSelectedKabupaten(
+                    selectedKabupaten === reg.regionName ? 'ALL' : reg.regionName
+                  );
                 }}
                 className={`p-4 rounded-2xl border cursor-pointer transition ${
                   isSelected
@@ -530,12 +475,10 @@ export default function SitelistClient({
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
-                      {reg.regionType === 'KECAMATAN'
-                        ? `Kecamatan • Kab. ${reg.parentKabupaten}`
-                        : 'Kabupaten'}
+                      Kota
                     </span>
                     <h3 className="text-base font-extrabold text-slate-900 mt-1">
-                      {reg.regionType === 'KECAMATAN' ? `Kec. ${reg.regionName}` : `Kab. ${reg.regionName}`}
+                      Kota {reg.regionName}
                     </h3>
                   </div>
                   <div className="text-right">
@@ -677,32 +620,16 @@ export default function SitelistClient({
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5">
               <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-xs font-bold text-slate-700">Kabupaten:</span>
+              <span className="text-xs font-bold text-slate-700">Kota:</span>
               <select
                 value={selectedKabupaten}
                 onChange={(e) => setSelectedKabupaten(e.target.value)}
                 className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="ALL">Semua Kabupaten</option>
-                {kabupatenList.map((kab) => (
-                  <option key={kab} value={kab}>
-                    {kab}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-slate-700">Kecamatan:</span>
-              <select
-                value={selectedKecamatan}
-                onChange={(e) => setSelectedKecamatan(e.target.value)}
-                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="ALL">Semua Kecamatan</option>
-                {kecamatanList.map((kec) => (
-                  <option key={kec} value={kec}>
-                    {kec}
+                <option value="ALL">Semua Kota</option>
+                {kabupatenList.map((kota) => (
+                  <option key={kota} value={kota}>
+                    {kota}
                   </option>
                 ))}
               </select>
@@ -766,7 +693,7 @@ export default function SitelistClient({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari EMR Code, Cluster ID, Nama, Kecamatan..."
+              placeholder="Cari EMR Code, Cluster ID, Nama, Kota..."
               className="w-full pl-9 pr-4 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2 pointer-events-none" />
@@ -783,7 +710,6 @@ export default function SitelistClient({
                 <th className="px-2 py-3 whitespace-nowrap">Cluster ID</th>
                 <th className="px-2 py-3 whitespace-nowrap">Short Name</th>
                 <th className="px-2 py-3 whitespace-nowrap">OLT Name</th>
-                <th className="px-2 py-3 whitespace-nowrap">Kecamatan</th>
                 <th className="px-2 py-3 text-center whitespace-nowrap">Start Imple Date</th>
                 <th className="px-2 py-3 text-center whitespace-nowrap">Progres</th>
                 <th className="px-2 py-3 text-right whitespace-nowrap">Aksi / Navigasi</th>
@@ -792,7 +718,7 @@ export default function SitelistClient({
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-8 text-center text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
                     Tidak ada data Sitelist yang sesuai dengan filter.
                   </td>
                 </tr>
@@ -827,17 +753,6 @@ export default function SitelistClient({
                     <td className="px-2 py-2.5 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px]">
                         {entry.oltName}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2.5 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          entry.kecamatan.toLowerCase() === 'kedungtuban'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-purple-50 text-purple-700 border border-purple-200'
-                        }`}
-                      >
-                        {entry.kecamatan}
                       </span>
                     </td>
                     <td className="px-2 py-2.5 text-center whitespace-nowrap">
@@ -1085,38 +1000,18 @@ export default function SitelistClient({
 
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
-                    Kecamatan <span className="text-rose-500">*</span>
+                    Kota <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    list="kecamatan-options-list"
-                    value={formKecamatan}
-                    onChange={(e) => setFormKecamatan(e.target.value)}
-                    placeholder="Contoh: Kedungtuban / Cepu"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <datalist id="kecamatan-options-list">
-                    {kecamatanList.map((k) => (
-                      <option key={k} value={k} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    Kabupaten <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    list="kabupaten-options-list"
+                    list="kota-options-list"
                     value={formKabupaten}
                     onChange={(e) => setFormKabupaten(e.target.value)}
                     placeholder="Contoh: Blora"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <datalist id="kabupaten-options-list">
+                  <datalist id="kota-options-list">
                     {kabupatenList.map((k) => (
                       <option key={k} value={k} />
                     ))}

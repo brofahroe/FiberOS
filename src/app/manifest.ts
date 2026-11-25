@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'FiberOS - FTTH Rollout & Progress Management',
     short_name: 'FiberOS',
-    description: 'Sistem Manajemen Progres Harian & Rollout FTTH GCI-MTI Blora',
+    description: 'Sistem Manajemen Progres Harian & Rollout FTTH GCI',
     start_url: '/',
     display: 'standalone',
     orientation: 'any',

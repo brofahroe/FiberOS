@@ -50,8 +50,8 @@ export async function runInitialSeed() {
     const project = await prisma.project.create({
       data: {
         code: 'BLA-KEDUNGTUBAN',
-        name: 'GCI-MTI BLORA',
-        description: 'Proyek FTTH Rollout Kedungtuban Blora',
+        name: 'GCI',
+        description: 'Proyek FTTH Rollout GCI',
       },
     });
 

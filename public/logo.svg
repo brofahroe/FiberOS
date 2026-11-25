@@ -34,5 +34,5 @@
   <text x="174" y="88" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="900" font-size="64" fill="#0f172a" letter-spacing="-1.5">Fiber<tspan fill="#2563eb">OS</tspan></text>
   <rect x="430" y="46" width="76" height="32" rx="8" fill="#dbeafe" />
   <text x="468" y="68" text-anchor="middle" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="800" font-size="18" fill="#1d4ed8">FTTH</text>
-  <text x="176" y="122" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" font-size="22" fill="#64748b" letter-spacing="0.5">GCI-MTI BLORA ROLLOUT MONITORING</text>
+  <text x="176" y="122" font-family="Inter, system-ui, -apple-system, sans-serif" font-weight="600" font-size="22" fill="#64748b" letter-spacing="0.5">GCI ROLLOUT MONITORING</text>
 </svg>

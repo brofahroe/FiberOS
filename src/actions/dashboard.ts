@@ -77,8 +77,12 @@ export async function getDashboardData() {
       };
     }
 
-    if (project.name.includes('ALL CL KEDUNGTUBAN') || project.name === 'ROLLOUT GCI-MTI BLORA') {
-      const updatedName = 'GCI-MTI BLORA';
+    if (
+      project.name.includes('ALL CL KEDUNGTUBAN') ||
+      project.name === 'ROLLOUT GCI-MTI BLORA' ||
+      project.name === 'GCI-MTI BLORA'
+    ) {
+      const updatedName = 'GCI';
       await prisma.project.update({
         where: { id: project.id },
         data: { name: updatedName },

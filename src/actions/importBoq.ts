@@ -503,7 +503,7 @@ export async function commitBoqImport(data: {
       project = await prisma.project.create({
         data: {
           code: 'BLA-KEDUNGTUBAN',
-          name: 'GCI-MTI BLORA',
+          name: 'GCI',
         },
       });
     }
