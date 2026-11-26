@@ -127,10 +127,12 @@ function formatCardStat(value: number): string {
 export default function DashboardSummaryClient({
   project,
   clusters,
+  canCreateInput = true,
 }: {
   project: ProjectSummary;
   categories: CategoryProgress[];
   clusters: ClusterWithProgress[];
+  canCreateInput?: boolean;
 }) {
   const [selectedKabupaten, setSelectedKabupaten] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -138,7 +140,7 @@ export default function DashboardSummaryClient({
   const [viewMode, setViewMode] = useState<'TABLE' | 'CARD'>('TABLE');
 
   const kabupatenOptions = useMemo(() => {
-    const set = new Set<string>(['Blora']);
+    const set = new Set<string>();
     clusters.forEach((c) => {
       if (c.kabupaten) set.add(c.kabupaten);
     });
@@ -621,14 +623,16 @@ export default function DashboardSummaryClient({
           </div>
         )}
 
-        <div className="mt-4 pt-2 flex items-center justify-start">
-          <Link
-            href={`/daily-input?clusterId=${cluster.id}`}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-          >
-            + Input Harian
-          </Link>
-        </div>
+        {canCreateInput && (
+          <div className="mt-4 pt-2 flex items-center justify-start">
+            <Link
+              href={`/daily-input?clusterId=${cluster.id}`}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+            >
+              + Input Harian
+            </Link>
+          </div>
+        )}
       </div>
     );
   };
@@ -1091,12 +1095,21 @@ export default function DashboardSummaryClient({
                                 <span className="text-slate-400"> / {formatCardStat(summary.fdt.boq)}</span>
                               </td>
                               <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                                <Link
-                                  href={`/daily-input?clusterId=${cluster.id}`}
-                                  className="inline-flex px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition"
-                                >
-                                  + Input
-                                </Link>
+                                {canCreateInput ? (
+                                  <Link
+                                    href={`/daily-input?clusterId=${cluster.id}`}
+                                    className="inline-flex px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition"
+                                  >
+                                    + Input
+                                  </Link>
+                                ) : (
+                                  <Link
+                                    href={`/matrix?clusterId=${cluster.id}`}
+                                    className="inline-flex px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition"
+                                  >
+                                    Lihat
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -1304,12 +1317,21 @@ export default function DashboardSummaryClient({
                                 <span className="text-slate-400"> / {formatCardStat(summary.mfJc.boq)}</span>
                               </td>
                               <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                                <Link
-                                  href={`/daily-input?clusterId=${cluster.id}`}
-                                  className="inline-flex px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-[11px] transition"
-                                >
-                                  + Input
-                                </Link>
+                                {canCreateInput ? (
+                                  <Link
+                                    href={`/daily-input?clusterId=${cluster.id}`}
+                                    className="inline-flex px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-[11px] transition"
+                                  >
+                                    + Input
+                                  </Link>
+                                ) : (
+                                  <Link
+                                    href={`/matrix?clusterId=${cluster.id}`}
+                                    className="inline-flex px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition"
+                                  >
+                                    Lihat
+                                  </Link>
+                                )}
                               </td>
                             </tr>
                           ))}

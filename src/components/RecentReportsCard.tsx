@@ -40,7 +40,15 @@ interface RenameModalState {
   oldTeamName: string;
 }
 
-export default function RecentReportsCard({ reports }: { reports: RecentReportEntry[] }) {
+export default function RecentReportsCard({
+  reports,
+  canEditReports = true,
+  canOpenDailyInput = true,
+}: {
+  reports: RecentReportEntry[];
+  canEditReports?: boolean;
+  canOpenDailyInput?: boolean;
+}) {
   const router = useRouter();
   const [showAll, setShowAll] = useState<boolean>(false);
   const [filterCluster, setFilterCluster] = useState<string>('ALL');
@@ -225,31 +233,42 @@ export default function RecentReportsCard({ reports }: { reports: RecentReportEn
                   <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">
                     {rep.reportDate}
                   </span>
-                  {rep.reportTeams.map((team) => (
-                    <button
-                      key={team.reportId}
-                      type="button"
-                      onClick={() => openRenameModal(rep, team)}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded text-[11px] font-semibold transition group cursor-pointer"
-                      title={`Klik untuk ubah nama tim "${team.teamName}"`}
-                    >
-                      <span>{team.teamName}</span>
-                      <Pencil className="w-2.5 h-2.5 text-indigo-500 group-hover:text-indigo-700" />
-                    </button>
-                  ))}
+                  {rep.reportTeams.map((team) =>
+                    canEditReports ? (
+                      <button
+                        key={team.reportId}
+                        type="button"
+                        onClick={() => openRenameModal(rep, team)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded text-[11px] font-semibold transition group cursor-pointer"
+                        title={`Klik untuk ubah nama tim "${team.teamName}"`}
+                      >
+                        <span>{team.teamName}</span>
+                        <Pencil className="w-2.5 h-2.5 text-indigo-500 group-hover:text-indigo-700" />
+                      </button>
+                    ) : (
+                      <span
+                        key={team.reportId}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200/80 rounded text-[11px] font-semibold"
+                      >
+                        <span>{team.teamName}</span>
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 self-start sm:self-auto">
                 <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
                   {rep.items.length} item terupdate
                 </span>
-                <Link
-                  href={editHref}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 px-2.5 py-1 rounded-lg transition"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Edit</span>
-                </Link>
+                {canOpenDailyInput && (
+                  <Link
+                    href={editHref}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-blue-50 px-2.5 py-1 rounded-lg transition"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{canEditReports ? 'Edit' : 'Lihat'}</span>
+                  </Link>
+                )}
               </div>
             </div>
           );

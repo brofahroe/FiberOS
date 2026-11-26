@@ -5,6 +5,11 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser, SESSION_COOKIE_NAME, type UserRole } from '@/lib/auth';
 import {
+  normalizeAllowedCities,
+  normalizePermissions,
+  type UserPermissions,
+} from '@/lib/permissions';
+import {
   ensureDefaultUsers,
   hashPassword,
   setSessionCookieForUser,
@@ -186,6 +191,8 @@ export interface AdminUserItem {
   fullName: string;
   jobTitle: string;
   role: UserRole;
+  permissions: UserPermissions;
+  allowedCities: string[];
   mustChangePassword: boolean;
   createdAt: string;
 }
@@ -195,6 +202,8 @@ export async function createUserAction(data: {
   fullName: string;
   jobTitle: string;
   role: UserRole;
+  permissions?: UserPermissions;
+  allowedCities?: string[];
   password: string;
   mustChangePassword: boolean;
 }): Promise<{ success: boolean; user?: AdminUserItem; error?: string; message?: string }> {
@@ -207,6 +216,8 @@ export async function createUserAction(data: {
   const fullName = (data.fullName || '').trim().replace(/\s+/g, ' ');
   const jobTitle = (data.jobTitle || '').trim().replace(/\s+/g, ' ') || 'Pengawas Lapangan';
   const role: UserRole = data.role === 'ADMIN' ? 'ADMIN' : 'USER';
+  const permissions = normalizePermissions(data.permissions, role);
+  const allowedCities = normalizeAllowedCities(data.allowedCities, role);
   const password = data.password || '';
 
   if (!username || username.length < 3 || /\s/.test(username)) {
@@ -237,12 +248,15 @@ export async function createUserAction(data: {
         fullName,
         jobTitle,
         role,
+        permissions: JSON.stringify(permissions),
+        allowedCities: JSON.stringify(allowedCities),
         passwordHash: hashPassword(password),
         mustChangePassword: Boolean(data.mustChangePassword),
       },
     });
 
     revalidatePath('/admin/users');
+    revalidatePath('/', 'layout');
 
     return {
       success: true,
@@ -253,6 +267,8 @@ export async function createUserAction(data: {
         fullName: created.fullName,
         jobTitle: created.jobTitle,
         role: created.role === 'ADMIN' ? 'ADMIN' : 'USER',
+        permissions: normalizePermissions(created.permissions, role),
+        allowedCities: normalizeAllowedCities(created.allowedCities, role),
         mustChangePassword: created.mustChangePassword,
         createdAt: created.createdAt.toISOString(),
       },
@@ -260,6 +276,74 @@ export async function createUserAction(data: {
   } catch (err) {
     console.error('Create user error:', err);
     return { success: false, error: 'Gagal membuat user baru.' };
+  }
+}
+
+export async function updateUserAccessAction(data: {
+  userId: string;
+  fullName: string;
+  jobTitle: string;
+  role: UserRole;
+  permissions: UserPermissions;
+  allowedCities: string[];
+}): Promise<{ success: boolean; user?: AdminUserItem; error?: string; message?: string }> {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || currentUser.role !== 'ADMIN') {
+    return { success: false, error: 'Hanya Admin yang dapat mengubah wewenang user.' };
+  }
+
+  const fullName = (data.fullName || '').trim().replace(/\s+/g, ' ');
+  const jobTitle = (data.jobTitle || '').trim().replace(/\s+/g, ' ') || 'Pengawas Lapangan';
+  const requestedRole: UserRole = data.role === 'ADMIN' ? 'ADMIN' : 'USER';
+
+  if (!fullName) {
+    return { success: false, error: 'Nama Lengkap wajib diisi.' };
+  }
+  if (data.userId === currentUser.id && requestedRole !== 'ADMIN') {
+    return {
+      success: false,
+      error: 'Tidak dapat menurunkan hak akses akun Admin yang sedang Anda gunakan.',
+    };
+  }
+
+  const permissions = normalizePermissions(data.permissions, requestedRole);
+  const allowedCities = normalizeAllowedCities(data.allowedCities, requestedRole);
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: data.userId },
+      data: {
+        fullName,
+        jobTitle,
+        role: requestedRole,
+        permissions: JSON.stringify(permissions),
+        allowedCities: JSON.stringify(allowedCities),
+      },
+    });
+
+    const resolvedRole: UserRole = updated.role === 'ADMIN' ? 'ADMIN' : 'USER';
+
+    revalidatePath('/admin/users');
+    revalidatePath('/', 'layout');
+
+    return {
+      success: true,
+      message: `Wewenang & Kota user "${updated.username}" berhasil diperbarui.`,
+      user: {
+        id: updated.id,
+        username: updated.username,
+        fullName: updated.fullName,
+        jobTitle: updated.jobTitle,
+        role: resolvedRole,
+        permissions: normalizePermissions(updated.permissions, resolvedRole),
+        allowedCities: normalizeAllowedCities(updated.allowedCities, resolvedRole),
+        mustChangePassword: updated.mustChangePassword,
+        createdAt: updated.createdAt.toISOString(),
+      },
+    };
+  } catch (err) {
+    console.error('Update user access error:', err);
+    return { success: false, error: 'Gagal memperbarui wewenang user.' };
   }
 }
 

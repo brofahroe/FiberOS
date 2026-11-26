@@ -1,7 +1,9 @@
+import type { UserPermissions, UserRole } from '@/lib/permissions';
+
 export const SESSION_COOKIE_NAME = 'fiberos_session';
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 hari
 
-export type UserRole = 'ADMIN' | 'USER';
+export type { UserRole };
 
 export interface SessionTokenUser {
   id: string;
@@ -13,6 +15,8 @@ export interface SessionTokenUser {
 export interface SessionUser extends SessionTokenUser {
   fullName: string;
   jobTitle: string;
+  permissions: UserPermissions;
+  allowedCities: string[];
 }
 
 function getAuthSecret(): string {

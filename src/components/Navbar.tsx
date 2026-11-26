@@ -19,6 +19,7 @@ import FiberOsLogo from '@/components/FiberOsLogo';
 import ThemeToggle from '@/components/ThemeToggle';
 import { logoutAction } from '@/actions/auth';
 import type { SessionUser } from '@/lib/authSession';
+import { hasAnyDailyInputAccess } from '@/lib/permissions';
 
 export default function Navbar({ currentUser }: { currentUser: SessionUser | null }) {
   const pathname = usePathname();
@@ -36,14 +37,32 @@ export default function Navbar({ currentUser }: { currentUser: SessionUser | nul
     router.refresh();
   };
 
-  const navLinks = [
-    { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/daily-input', label: 'Input Harian', icon: PlusCircle, highlight: true },
-    { href: '/matrix', label: 'Matriks & Ekspor', icon: FileSpreadsheet },
-    { href: '/sitelist', label: 'Sitelist', icon: MapPin },
-    { href: '/import-boq', label: 'Impor BOQ', icon: Upload },
-    { href: '/clusters', label: 'Cluster & BOQ', icon: Layers },
+  const perms = currentUser.permissions;
+  const allNavLinks = [
+    { href: '/', label: 'Dashboard', icon: LayoutDashboard, allowed: perms.dashboardView },
+    {
+      href: '/daily-input',
+      label: 'Input Harian',
+      icon: PlusCircle,
+      highlight: true,
+      allowed: hasAnyDailyInputAccess(perms),
+    },
+    { href: '/matrix', label: 'Matriks & Ekspor', icon: FileSpreadsheet, allowed: perms.matrixView },
+    {
+      href: '/sitelist',
+      label: 'Sitelist',
+      icon: MapPin,
+      allowed: perms.sitelistView || perms.sitelistManage,
+    },
+    { href: '/import-boq', label: 'Impor BOQ', icon: Upload, allowed: perms.importBoq },
+    {
+      href: '/clusters',
+      label: 'Cluster & BOQ',
+      icon: Layers,
+      allowed: perms.clustersView || perms.clustersEdit,
+    },
   ];
+  const navLinks = allNavLinks.filter((l) => l.allowed);
 
   return (
     <header className="sticky top-0 z-40 bg-white dark:bg-slate-900/95 dark:backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-colors duration-200">

@@ -108,6 +108,8 @@ model User {
   fullName           String
   jobTitle           String   @default("Pengawas Lapangan")
   role               String   @default("USER") // ADMIN | USER
+  permissions        String?  // JSON of UserPermissions for custom per-user access
+  allowedCities      String?  // JSON array of allowed Kota names or ["ALL"]
   passwordHash       String
   mustChangePassword Boolean  @default(true)
   createdAt          DateTime @default(now())

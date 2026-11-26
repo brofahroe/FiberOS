@@ -64,11 +64,17 @@ export default function MatrixClient({
   matrixRows,
   clustersList,
   initialClusterId,
+  canExport = true,
+  canEditStatus = true,
+  canEditCells = true,
 }: {
   dates: string[];
   matrixRows: MatrixRowItem[];
   clustersList: ClusterInfo[];
   initialClusterId?: string;
+  canExport?: boolean;
+  canEditStatus?: boolean;
+  canEditCells?: boolean;
 }) {
   const [rows, setRows] = useState<MatrixRowItem[]>(matrixRows);
   const [selectedCluster, setSelectedCluster] = useState<string>(initialClusterId || 'ALL');
@@ -245,6 +251,14 @@ export default function MatrixClient({
     try {
       setExporting(true);
       const res = await exportMatrixToExcel(selectedCluster);
+      if ('error' in res && res.error) {
+        alert(res.error);
+        return;
+      }
+      if (!res.base64) {
+        alert('Gagal mengekspor file Excel');
+        return;
+      }
       
       // Convert base64 to blob and trigger download
       const byteCharacters = atob(res.base64);
@@ -287,34 +301,36 @@ export default function MatrixClient({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50"
-          >
-            {exporting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4" />
-            )}
-            <span>Export to Excel (.xlsx)</span>
-          </button>
+        {canExport && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>Export to Excel (.xlsx)</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              const targetClusterId = selectedCluster !== 'ALL' ? selectedCluster : (clustersList[0]?.id || '');
-              const latestDate = dates[dates.length - 1] || '12-Nov-26';
-              setWaTarget({ clusterId: targetClusterId, dateStr: latestDate });
-              setShowWaModal(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-emerald-400 border border-slate-800 rounded-xl text-xs font-bold shadow-md transition"
-          >
-            <MessageSquare className="w-4 h-4 text-emerald-400" />
-            <span>Format WA</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                const targetClusterId = selectedCluster !== 'ALL' ? selectedCluster : (clustersList[0]?.id || '');
+                const latestDate = dates[dates.length - 1] || '12-Nov-26';
+                setWaTarget({ clusterId: targetClusterId, dateStr: latestDate });
+                setShowWaModal(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-emerald-400 border border-slate-800 rounded-xl text-xs font-bold shadow-md transition"
+            >
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span>Format WA</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter and Search Bar */}
@@ -387,10 +403,12 @@ export default function MatrixClient({
       </div>
 
       {/* Tip Banner */}
-      <div className="flex items-center gap-2 text-xs text-slate-600 bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-xl">
-        <span className="text-blue-700 font-bold">💡 Fitur Koreksi:</span>
-        <span>Klik angka pada kolom tanggal untuk mengoreksi volume. Koreksi dinonaktifkan pada cluster/tanggal yang memiliki beberapa tim.</span>
-      </div>
+      {canEditCells && (
+        <div className="flex items-center gap-2 text-xs text-slate-600 bg-blue-50/70 border border-blue-100 px-4 py-2.5 rounded-xl">
+          <span className="text-blue-700 font-bold">💡 Fitur Koreksi:</span>
+          <span>Klik angka pada kolom tanggal untuk mengoreksi volume. Koreksi dinonaktifkan pada cluster/tanggal yang memiliki beberapa tim.</span>
+        </div>
+      )}
 
       {/* The Matrix Table Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -602,8 +620,10 @@ export default function MatrixClient({
                         <select
                           value={currentStatus}
                           onChange={(e) => handleStatusChange(row.workItemId, e.target.value)}
-                          disabled={updatingId === row.workItemId}
-                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                          disabled={!canEditStatus || updatingId === row.workItemId}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                            !canEditStatus ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
+                          } ${
                             currentStatus === 'DONE'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
                               : currentStatus === 'HOLD'
@@ -656,10 +676,18 @@ export default function MatrixClient({
                         return (
                           <td
                             key={dateStr}
-                            onClick={() => handleOpenEditCell(row, dateStr)}
-                            title="Klik untuk mengoreksi volume atau menghapus salah input"
-                            className={`p-2 text-center border-r border-slate-100 transition select-none group min-w-[65px] cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400 ${
-                              val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300 hover:text-slate-600'
+                            onClick={canEditCells ? () => handleOpenEditCell(row, dateStr) : undefined}
+                            title={
+                              canEditCells
+                                ? 'Klik untuk mengoreksi volume atau menghapus salah input'
+                                : undefined
+                            }
+                            className={`p-2 text-center border-r border-slate-100 transition select-none group min-w-[65px] ${
+                              canEditCells
+                                ? 'cursor-pointer hover:bg-blue-100 hover:ring-2 hover:ring-blue-400'
+                                : ''
+                            } ${
+                              val ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-300'
                             }`}
                           >
                             <span className="inline-block px-1 rounded">

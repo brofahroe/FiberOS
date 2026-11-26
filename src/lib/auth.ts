@@ -7,6 +7,7 @@ import {
   type UserRole,
   verifySessionToken,
 } from '@/lib/authSession';
+import { normalizeAllowedCities, normalizePermissions } from '@/lib/permissions';
 
 export { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS, type SessionUser, type UserRole };
 
@@ -25,18 +26,24 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
         fullName: true,
         jobTitle: true,
         role: true,
+        permissions: true,
+        allowedCities: true,
         mustChangePassword: true,
       },
     });
 
     if (!dbUser) return null;
 
+    const role: UserRole = dbUser.role === 'ADMIN' ? 'ADMIN' : 'USER';
+
     return {
       id: dbUser.id,
       username: dbUser.username,
       fullName: dbUser.fullName,
       jobTitle: dbUser.jobTitle,
-      role: dbUser.role === 'ADMIN' ? 'ADMIN' : 'USER',
+      role,
+      permissions: normalizePermissions(dbUser.permissions, role),
+      allowedCities: normalizeAllowedCities(dbUser.allowedCities, role),
       mustChangePassword: dbUser.mustChangePassword,
     };
   } catch {

@@ -8,6 +8,11 @@ import sitelistData from '@/data/sitelist.json';
 import { DEFAULT_BOQ_WORK_ITEMS, sortWorkItems } from '@/lib/progressCalculator';
 import { getCurrentUser } from '@/lib/auth';
 import {
+  canAccessCity,
+  canEditOrDeleteDailyReport,
+  hasAnyDailyInputAccess,
+} from '@/lib/permissions';
+import {
   appendTeamToExcelFile,
   formatTimPelaksanaName,
   getMasterTeams,
@@ -140,6 +145,12 @@ async function resolveOrProvisionCluster(clusterIdOrCode: string) {
         projectId: project.id,
         name: matchedSite.shortName,
         code: matchedSite.clusterId,
+        emrSiteCode: matchedSite.emrSiteCode,
+        subfeederId: matchedSite.subfeederId,
+        clusterName: matchedSite.clusterName,
+        oltName: matchedSite.oltName,
+        kecamatan: matchedSite.kecamatan || '-',
+        kabupaten: matchedSite.kabupaten || 'Blora',
         homePasses: 0,
       },
     });
@@ -179,10 +190,15 @@ async function resolveOrProvisionCluster(clusterIdOrCode: string) {
 }
 
 export async function getClusterItemsForForm(clusterId: string) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !hasAnyDailyInputAccess(currentUser.permissions)) {
+    return null;
+  }
+
   await ensureDatabaseRestoredFromNextcloud();
   const cluster = await resolveOrProvisionCluster(clusterId);
 
-  if (!cluster) return null;
+  if (!cluster || !canAccessCity(currentUser, cluster.kabupaten)) return null;
 
   const items = sortWorkItems(cluster.workItems).map((item) => {
     const installed = item.progressList.reduce((sum, p) => sum + p.quantity, 0);
@@ -235,13 +251,25 @@ export async function submitDailyProgress(data: {
   if (!currentUser) {
     return { success: false, error: 'Sesi login tidak valid. Silakan login kembali.' };
   }
+  if (!hasAnyDailyInputAccess(currentUser.permissions)) {
+    return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin Input Harian.' };
+  }
   const verifiedReporterName = currentUser.fullName || currentUser.username;
 
   try {
     await ensureDatabaseRestoredFromNextcloud();
     // Resolve clusterId in case a sitelist code was passed
     const resolvedCluster = await resolveOrProvisionCluster(data.clusterId);
-    const targetClusterId = resolvedCluster ? resolvedCluster.id : data.clusterId;
+    if (!resolvedCluster) {
+      return { success: false, error: 'Cluster tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, resolvedCluster.kabupaten)) {
+      return {
+        success: false,
+        error: `Akses ditolak: Anda tidak memiliki akses untuk Kota "${resolvedCluster.kabupaten || 'Blora'}".`,
+      };
+    }
+    const targetClusterId = resolvedCluster.id;
 
     const canonicalDate = normalizeToDdMmmYy(data.reportDate);
     const dateVariants = getDateVariants(data.reportDate);
@@ -255,6 +283,20 @@ export async function submitDailyProgress(data: {
       },
       include: { items: true },
     });
+
+    if (existingReport) {
+      if (!canEditOrDeleteDailyReport(currentUser, existingReport.reporterName)) {
+        return {
+          success: false,
+          error: `Akses ditolak: Laporan ini dibuat oleh "${existingReport.reporterName || 'Pengawas lain'}". Anda tidak memiliki izin mengeditnya.`,
+        };
+      }
+    } else if (!currentUser.permissions.dailyInputCreate) {
+      return {
+        success: false,
+        error: 'Akses ditolak: Anda tidak memiliki izin menambah input harian baru.',
+      };
+    }
 
     const existingQtyMap = new Map<string, number>();
     if (existingReport) {
@@ -401,6 +443,28 @@ export async function submitDailyProgress(data: {
 
 export async function getDailyReportTeams(clusterId: string, reportDate: string) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !hasAnyDailyInputAccess(currentUser.permissions)) {
+      return {
+        success: false,
+        teams: [] as string[],
+        previousTeams: [] as Array<{ teamName: string; lastDate: string }>,
+        error: 'Akses ditolak.',
+      };
+    }
+    const targetCluster = await prisma.cluster.findUnique({
+      where: { id: clusterId },
+      select: { kabupaten: true },
+    });
+    if (targetCluster && !canAccessCity(currentUser, targetCluster.kabupaten)) {
+      return {
+        success: false,
+        teams: [] as string[],
+        previousTeams: [] as Array<{ teamName: string; lastDate: string }>,
+        error: 'Akses ditolak untuk wilayah Kota cluster ini.',
+      };
+    }
+
     const dateVariants = getDateVariants(reportDate);
     const dateVariantSet = new Set(dateVariants.map((d) => d.toLowerCase()));
     const selectedDateTs = parseReportDateTimestamp(reportDate);
@@ -500,8 +564,13 @@ export async function getDailyReportTeams(clusterId: string, reportDate: string)
 
 export async function getExistingDailyReport(clusterId: string, reportDate: string, teamName: string) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !hasAnyDailyInputAccess(currentUser.permissions)) {
+      return { exists: false, report: null, canEdit: false };
+    }
+
     const normalizedTeamName = teamName.trim();
-    if (!normalizedTeamName) return { exists: false, report: null };
+    if (!normalizedTeamName) return { exists: false, report: null, canEdit: false };
 
     const dateVariants = getDateVariants(reportDate);
     const report = await prisma.dailyReport.findFirst({
@@ -511,14 +580,19 @@ export async function getExistingDailyReport(clusterId: string, reportDate: stri
         teamName: normalizedTeamName,
       },
       include: {
+        cluster: { select: { kabupaten: true } },
         items: true,
       },
     });
 
-    if (!report) return { exists: false, report: null };
+    if (!report) return { exists: false, report: null, canEdit: false };
+    if (!canAccessCity(currentUser, report.cluster.kabupaten)) {
+      return { exists: false, report: null, canEdit: false, error: 'Akses wilayah Kota ditolak.' };
+    }
 
     return {
       exists: true,
+      canEdit: canEditOrDeleteDailyReport(currentUser, report.reporterName),
       report: {
         id: report.id,
         reporterName: report.reporterName || '',
@@ -534,7 +608,7 @@ export async function getExistingDailyReport(clusterId: string, reportDate: stri
     };
   } catch (error: any) {
     console.error('Error getting existing report:', error);
-    return { exists: false, error: error.message };
+    return { exists: false, canEdit: false, error: error.message };
   }
 }
 
@@ -546,6 +620,22 @@ export async function updateDailyCellProgress(
   newReportDate?: string
 ) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || currentUser.permissions.dailyInputEditScope === 'NONE') {
+      return {
+        success: false,
+        error: 'Akses ditolak: Anda tidak memiliki izin mengoreksi data progres harian.',
+      };
+    }
+
+    const targetCluster = await prisma.cluster.findUnique({
+      where: { id: clusterId },
+      select: { kabupaten: true },
+    });
+    if (!targetCluster || !canAccessCity(currentUser, targetCluster.kabupaten)) {
+      return { success: false, error: 'Akses wilayah Kota ditolak.' };
+    }
+
     const canonicalDate = normalizeToDdMmmYy(reportDate);
     const targetCanonicalDate = newReportDate ? normalizeToDdMmmYy(newReportDate) : canonicalDate;
     const isMovingDate = targetCanonicalDate !== canonicalDate;
@@ -558,6 +648,15 @@ export async function updateDailyCellProgress(
       },
       orderBy: { updatedAt: 'desc' },
     });
+
+    for (const r of reportsForOldDate) {
+      if (!canEditOrDeleteDailyReport(currentUser, r.reporterName)) {
+        return {
+          success: false,
+          error: `Akses ditolak: Laporan pada ${canonicalDate} dibuat oleh "${r.reporterName || 'Pengawas lain'}".`,
+        };
+      }
+    }
 
     const oldReportIds = reportsForOldDate.map((r) => r.id);
 
@@ -691,6 +790,11 @@ export async function updateDailyCellProgress(
 
 export async function deleteDailyReportByDate(clusterId: string, reportDate: string, teamName: string) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || currentUser.permissions.dailyInputEditScope === 'NONE') {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menghapus laporan.' };
+    }
+
     const normalizedTeamName = teamName.trim();
     if (!normalizedTeamName) {
       return { success: false, error: 'Nama Tim Pelaksana wajib diisi untuk menghapus laporan.' };
@@ -703,10 +807,22 @@ export async function deleteDailyReportByDate(clusterId: string, reportDate: str
         reportDate: { in: dateVariants },
         teamName: normalizedTeamName,
       },
+      include: {
+        cluster: { select: { kabupaten: true } },
+      },
     });
 
     if (!report) {
       return { success: false, error: 'Laporan tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, report.cluster.kabupaten)) {
+      return { success: false, error: 'Akses wilayah Kota ditolak.' };
+    }
+    if (!canEditOrDeleteDailyReport(currentUser, report.reporterName)) {
+      return {
+        success: false,
+        error: `Akses ditolak: Laporan ini dibuat oleh "${report.reporterName || 'Pengawas lain'}". Anda hanya diizinkan menghapus laporan milik sendiri.`,
+      };
     }
 
     // Delete progress items first (cascade will handle it, but explicit delete is safe)
@@ -738,6 +854,11 @@ export async function renameDailyReportTeam(input: {
   scope?: 'SINGLE' | 'CLUSTER' | 'ALL';
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || currentUser.permissions.dailyInputEditScope === 'NONE') {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin mengubah nama tim.' };
+    }
+
     const newTeamName = input.newTeamName.trim();
     if (!newTeamName) {
       return { success: false, error: 'Nama Tim Pelaksana baru wajib diisi.' };
@@ -746,12 +867,21 @@ export async function renameDailyReportTeam(input: {
     const source = await prisma.dailyReport.findUnique({
       where: { id: input.reportId },
       include: {
-        cluster: { select: { name: true } },
+        cluster: { select: { name: true, kabupaten: true } },
       },
     });
 
     if (!source) {
       return { success: false, error: 'Laporan tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, source.cluster.kabupaten)) {
+      return { success: false, error: 'Akses wilayah Kota ditolak.' };
+    }
+    if (!canEditOrDeleteDailyReport(currentUser, source.reporterName)) {
+      return {
+        success: false,
+        error: `Akses ditolak: Laporan ini dibuat oleh "${source.reporterName || 'Pengawas lain'}".`,
+      };
     }
 
     const oldTeamName = source.teamName?.trim() || '';
@@ -765,7 +895,7 @@ export async function renameDailyReportTeam(input: {
     }
 
     const scope = input.scope || 'SINGLE';
-    const targetReports =
+    const rawTargetReports =
       scope === 'SINGLE' || !oldTeamName
         ? [source]
         : await prisma.dailyReport.findMany({
@@ -774,9 +904,15 @@ export async function renameDailyReportTeam(input: {
                 ? { clusterId: source.clusterId, teamName: oldTeamName }
                 : { teamName: oldTeamName },
             include: {
-              cluster: { select: { name: true } },
+              cluster: { select: { name: true, kabupaten: true } },
             },
           });
+
+    const targetReports = rawTargetReports.filter(
+      (rep) =>
+        canAccessCity(currentUser, rep.cluster.kabupaten) &&
+        canEditOrDeleteDailyReport(currentUser, rep.reporterName)
+    );
 
     if (targetReports.length === 0) {
       return { success: false, error: 'Tidak ada laporan yang cocok untuk diubah.' };
@@ -870,6 +1006,14 @@ export async function addMasterTeam(data: {
   team?: TimPelaksanaOption;
   error?: string;
 }> {
+  const currentUser = await getCurrentUser();
+  if (
+    !currentUser ||
+    (!currentUser.permissions.dailyInputCreate && currentUser.permissions.dailyInputEditScope === 'NONE')
+  ) {
+    return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menambah tim.' };
+  }
+
   const leader = (data.timPelaksana || '').trim().replace(/\s+/g, ' ');
   const vendor = (data.subcon || '').trim().replace(/\s+/g, ' ');
 

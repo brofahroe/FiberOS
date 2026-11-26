@@ -8,6 +8,8 @@ import {
   normalizeItemClassification,
 } from '@/lib/progressCalculator';
 import { backupDatabaseToNextcloud } from '@/lib/dbSync';
+import { getCurrentUser } from '@/lib/auth';
+import { canAccessCity } from '@/lib/permissions';
 
 export type WorkItemScope = 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER';
 
@@ -147,6 +149,11 @@ export async function updateClusterWorkItem(input: {
   boq: number;
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.clustersEdit) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin mengedit BOQ.' };
+    }
+
     const boqNum = Number(input.boq);
     if (!Number.isFinite(boqNum) || boqNum < 0) {
       return { success: false, error: 'Target BOQ harus berupa angka >= 0.' };
@@ -158,13 +165,16 @@ export async function updateClusterWorkItem(input: {
     const current = await prisma.workItem.findUnique({
       where: { id: input.workItemId },
       include: {
-        cluster: { select: { id: true, name: true, projectType: true } },
+        cluster: { select: { id: true, name: true, projectType: true, kabupaten: true } },
         progressList: true,
       },
     });
 
     if (!current) {
       return { success: false, error: 'Item pekerjaan tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, current.cluster.kabupaten)) {
+      return { success: false, error: 'Akses ditolak untuk wilayah Kota cluster ini.' };
     }
 
     const meta = resolveWorkItemMetadata({
@@ -276,6 +286,11 @@ export async function addClusterWorkItem(input: {
   boq: number;
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.clustersEdit) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menambah item BOQ.' };
+    }
+
     const boqNum = Number(input.boq);
     if (!Number.isFinite(boqNum) || boqNum < 0) {
       return { success: false, error: 'Target BOQ harus berupa angka >= 0.' };
@@ -286,11 +301,14 @@ export async function addClusterWorkItem(input: {
 
     const cluster = await prisma.cluster.findUnique({
       where: { id: input.clusterId },
-      select: { id: true, name: true, projectType: true },
+      select: { id: true, name: true, projectType: true, kabupaten: true },
     });
 
     if (!cluster) {
       return { success: false, error: 'Cluster tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, cluster.kabupaten)) {
+      return { success: false, error: 'Akses ditolak untuk wilayah Kota cluster ini.' };
     }
 
     const meta = resolveWorkItemMetadata({
@@ -348,16 +366,24 @@ export async function addClusterWorkItem(input: {
 
 export async function deleteClusterWorkItem(input: { workItemId: string; force?: boolean }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.clustersEdit) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menghapus item BOQ.' };
+    }
+
     const item = await prisma.workItem.findUnique({
       where: { id: input.workItemId },
       include: {
-        cluster: { select: { name: true } },
+        cluster: { select: { name: true, kabupaten: true } },
         progressList: true,
       },
     });
 
     if (!item) {
       return { success: false, error: 'Item pekerjaan tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, item.cluster.kabupaten)) {
+      return { success: false, error: 'Akses ditolak untuk wilayah Kota cluster ini.' };
     }
 
     const totalInstalled = item.progressList.reduce((sum, p) => sum + p.quantity, 0);

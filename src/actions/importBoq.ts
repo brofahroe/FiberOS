@@ -9,6 +9,8 @@ import boqListFallback from '@/data/boq-list.json';
 import sitelistData from '@/data/sitelist.json';
 import { getCanonicalWorkItemSortOrder, isSubfeederOnlyBoqItem } from '@/lib/progressCalculator';
 import { backupDatabaseToNextcloud, ensureDatabaseRestoredFromNextcloud } from '@/lib/dbSync';
+import { getCurrentUser } from '@/lib/auth';
+import { canAccessCity } from '@/lib/permissions';
 
 export interface BoqReferenceRule {
   itemPekerjaan: string;
@@ -353,6 +355,11 @@ export async function parseBoqExcel(
   preferredScope?: BoqImportScope
 ): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.importBoq) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin Impor BOQ.' };
+    }
+
     const buffer = Buffer.from(base64Data, 'base64');
     const workbook = excel.read(buffer, { type: 'buffer' });
     const result = await parseWorkbook(workbook, originalFilename, preferredScope);
@@ -369,6 +376,11 @@ export async function parseSampleBoqFile(
   preferredScope?: BoqImportScope
 ): Promise<{ success: boolean; data?: ParsedBoqResult; error?: string }> {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.importBoq) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin Impor BOQ.' };
+    }
+
     const filePath = path.resolve(filename);
     if (!fs.existsSync(filePath)) {
       return { success: false, error: `File ${filename} tidak ditemukan.` };
@@ -493,6 +505,11 @@ export async function commitBoqImport(data: {
   conflictMode?: 'OVERWRITE' | 'CREATE_NEW_ONLY';
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.importBoq) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menyimpan Impor BOQ.' };
+    }
+
     await ensureDatabaseRestoredFromNextcloud();
 
     let project = await prisma.project.findFirst({
@@ -529,6 +546,14 @@ export async function commitBoqImport(data: {
         OR: [{ name: cleanedName }, { name: data.clusterName.trim() }, { name: data.clusterName.trim().toUpperCase() }],
       },
     });
+
+    const targetKota = cluster?.kabupaten || matchedSite?.kabupaten || 'Blora';
+    if (!canAccessCity(currentUser, targetKota)) {
+      return {
+        success: false,
+        error: `Akses ditolak: Anda tidak memiliki izin untuk Kota "${targetKota}".`,
+      };
+    }
 
     if (cluster && data.conflictMode === 'CREATE_NEW_ONLY') {
       return {

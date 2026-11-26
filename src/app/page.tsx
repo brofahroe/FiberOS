@@ -1,4 +1,7 @@
+import { redirect } from 'next/navigation';
 import { getDashboardData } from '@/actions/dashboard';
+import { getCurrentUser } from '@/lib/auth';
+import { getFirstAllowedPath, hasAnyDailyInputAccess } from '@/lib/permissions';
 import SeedButton from '@/components/SeedButton';
 import DashboardSummaryClient from '@/components/DashboardSummaryClient';
 import RecentReportsCard from '@/components/RecentReportsCard';
@@ -8,8 +11,22 @@ import { Upload } from 'lucide-react';
 export const revalidate = 0; // Fresh on every request
 
 export default async function DashboardPage() {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    redirect('/login');
+  }
+  if (currentUser.mustChangePassword) {
+    redirect('/profile?firstLogin=1');
+  }
+  if (!currentUser.permissions.dashboardView) {
+    redirect(getFirstAllowedPath(currentUser));
+  }
+
   const data = await getDashboardData();
   const { project, categories, clusters, recentReports } = data;
+  const canCreateInput = currentUser.permissions.dailyInputCreate;
+  const canEditDaily = currentUser.permissions.dailyInputEditScope !== 'NONE';
+  const canAccessDailyInput = hasAnyDailyInputAccess(currentUser.permissions);
 
   if (!project) {
     return (
@@ -63,10 +80,15 @@ export default async function DashboardPage() {
         project={project}
         categories={categories}
         clusters={clusters}
+        canCreateInput={canCreateInput}
       />
 
       {/* Recent Updates / Activity Log */}
-      <RecentReportsCard reports={recentReports} />
+      <RecentReportsCard
+        reports={recentReports}
+        canEditReports={canEditDaily}
+        canOpenDailyInput={canAccessDailyInput}
+      />
     </div>
   );
 }

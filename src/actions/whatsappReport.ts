@@ -1,6 +1,8 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
+import { canAccessCity } from '@/lib/permissions';
 import sitelistData from '@/data/sitelist.json';
 
 export interface WaReportItemMetrics {
@@ -102,19 +104,28 @@ export async function getMultiClusterWhatsAppReportData(
   reportDate?: string
 ): Promise<WaMultiClusterResponse> {
   try {
-    const allClusters = await prisma.cluster.findMany({
-      select: { id: true, name: true, code: true },
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.matrixExport) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin laporan WhatsApp.' };
+    }
+
+    const rawClusters = await prisma.cluster.findMany({
+      select: { id: true, name: true, code: true, kabupaten: true },
       orderBy: { name: 'asc' },
     });
+    const allClusters = rawClusters
+      .filter((c) => canAccessCity(currentUser, c.kabupaten))
+      .map(({ id, name, code }) => ({ id, name, code }));
 
     if (allClusters.length === 0) {
-      return { success: false, error: 'Belum ada cluster di sistem.' };
+      return { success: false, error: 'Belum ada cluster di Kota yang dapat Anda akses.' };
     }
 
     const validClusterIds = clusterIds.filter((id) => allClusters.some((c) => c.id === id));
     const targetIds = validClusterIds.length > 0 ? validClusterIds : [allClusters[0].id];
 
     const allReports = await prisma.dailyReport.findMany({
+      where: { clusterId: { in: allClusters.map((c) => c.id) } },
       select: { clusterId: true, reportDate: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -180,14 +191,22 @@ export async function getWhatsAppReportData(
   reportDate?: string
 ): Promise<{ success: boolean; data?: WaReportData; error?: string }> {
   try {
-    // 1. Get all clusters for dropdown selection
-    const allClusters = await prisma.cluster.findMany({
-      select: { id: true, name: true, code: true },
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.matrixExport) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin laporan WhatsApp.' };
+    }
+
+    // 1. Get all clusters for dropdown selection (scoped by allowed Kota)
+    const rawClusters = await prisma.cluster.findMany({
+      select: { id: true, name: true, code: true, kabupaten: true },
       orderBy: { name: 'asc' },
     });
+    const allClusters = rawClusters
+      .filter((c) => canAccessCity(currentUser, c.kabupaten))
+      .map(({ id, name, code }) => ({ id, name, code }));
 
     if (allClusters.length === 0) {
-      return { success: false, error: 'Belum ada cluster di sistem.' };
+      return { success: false, error: 'Belum ada cluster di Kota yang dapat Anda akses.' };
     }
 
     const targetClusterInfo = clusterId

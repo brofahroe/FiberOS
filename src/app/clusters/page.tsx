@@ -1,14 +1,32 @@
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth';
+import {
+  canAccessCity,
+  getFirstAllowedPath,
+  hasAnyDailyInputAccess,
+} from '@/lib/permissions';
 import { calculateClusterProgress, sortWorkItems } from '@/lib/progressCalculator';
 import ClustersBoqClient, { type ClusterBoqView } from './ClustersBoqClient';
 
 export const revalidate = 0;
 
 export default async function ClustersPage() {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) {
+    redirect('/login');
+  }
+  if (currentUser.mustChangePassword) {
+    redirect('/profile?firstLogin=1');
+  }
+  if (!currentUser.permissions.clustersView && !currentUser.permissions.clustersEdit) {
+    redirect(getFirstAllowedPath(currentUser));
+  }
+
   let clusterViews: ClusterBoqView[] = [];
 
   try {
-    const clusters = await prisma.cluster.findMany({
+    const rawClusters = await prisma.cluster.findMany({
       include: {
         workItems: {
           include: {
@@ -19,6 +37,8 @@ export default async function ClustersPage() {
       },
       orderBy: { name: 'asc' },
     });
+
+    const clusters = rawClusters.filter((c) => canAccessCity(currentUser, c.kabupaten));
 
     clusterViews = clusters.map((cluster) => {
       const calcInput = cluster.workItems.map((it) => {
@@ -82,5 +102,12 @@ export default async function ClustersPage() {
     console.error('Error fetching clusters:', err);
   }
 
-  return <ClustersBoqClient initialClusters={clusterViews} />;
+  return (
+    <ClustersBoqClient
+      initialClusters={clusterViews}
+      canEdit={currentUser.permissions.clustersEdit}
+      canCreateInput={hasAnyDailyInputAccess(currentUser.permissions)}
+      canViewMatrix={currentUser.permissions.matrixView}
+    />
+  );
 }

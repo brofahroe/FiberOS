@@ -2,11 +2,17 @@ import crypto from 'crypto';
 import { cookies, headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import {
+  ALL_CITIES_TOKEN,
+  DEFAULT_USER_CITY,
+  FULL_PERMISSIONS,
+  PRESET_PENGAWAS,
+  type UserRole,
+} from '@/lib/permissions';
+import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
   signSessionToken,
   type SessionTokenUser,
-  type UserRole,
 } from '@/lib/authSession';
 
 const DEFAULT_ACCOUNTS: ReadonlyArray<{
@@ -106,6 +112,10 @@ export async function ensureDefaultUsers(): Promise<void> {
         fullName: acc.fullName,
         jobTitle: acc.jobTitle,
         role: acc.role,
+        permissions: JSON.stringify(acc.role === 'ADMIN' ? FULL_PERMISSIONS : PRESET_PENGAWAS),
+        allowedCities: JSON.stringify(
+          acc.role === 'ADMIN' ? [ALL_CITIES_TOKEN] : [DEFAULT_USER_CITY]
+        ),
         passwordHash: hashPassword(acc.password),
         mustChangePassword: acc.mustChangePassword,
       },

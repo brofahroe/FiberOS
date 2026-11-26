@@ -42,6 +42,9 @@ export default function SitelistClient({
   kabupatenSummaries,
   kabupatenList,
   oltList,
+  canManage = true,
+  canCreateInput = true,
+  canViewMatrix = true,
 }: {
   initialEntries: SitelistEntry[];
   kecamatanSummaries?: RegionSummaryItem[];
@@ -49,6 +52,9 @@ export default function SitelistClient({
   kecamatanList?: string[];
   kabupatenList: string[];
   oltList: string[];
+  canManage?: boolean;
+  canCreateInput?: boolean;
+  canViewMatrix?: boolean;
 }) {
   const router = useRouter();
 
@@ -417,43 +423,45 @@ export default function SitelistClient({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {currentFilterStats.unprovisionedCount > 0 && (
+        {canManage && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {currentFilterStats.unprovisionedCount > 0 && (
+              <button
+                type="button"
+                onClick={handleActivateAll}
+                disabled={activatingAll}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+              >
+                {activatingAll ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Zap className="w-4 h-4" />
+                )}
+                <span>
+                  Aktifkan Semua ({currentFilterStats.unprovisionedCount} Site)
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={handleActivateAll}
-              disabled={activatingAll}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+              onClick={openImportModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition"
             >
-              {activatingAll ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4" />
-              )}
-              <span>
-                Aktifkan Semua ({currentFilterStats.unprovisionedCount} Site)
-              </span>
+              <Upload className="w-4 h-4" />
+              <span>Impor Excel / CSV</span>
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={openImportModal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 transition"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Impor Excel / CSV</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={openNewClusterModal}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>+ Tambah Cluster Baru</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={openNewClusterModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 transition"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>+ Tambah Cluster Baru</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Feedback Banner */}
@@ -897,41 +905,49 @@ export default function SitelistClient({
                     <td className="px-2 py-2.5 text-right whitespace-nowrap">
                       {entry.isProvisioned && entry.dbClusterId ? (
                         <div className="inline-flex items-center gap-1.5">
-                          <Link
-                            href={`/daily-input?clusterId=${entry.dbClusterId}`}
-                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition"
-                          >
-                            + Input
-                          </Link>
-                          <Link
-                            href={`/matrix?clusterId=${entry.dbClusterId}`}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition"
-                          >
-                            Matriks
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => openEditClusterModal(entry)}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
-                            title="Edit Identitas & Status Cluster"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeactivateEntry(entry)}
-                            disabled={deactivatingKey === entry.key}
-                            className="p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition disabled:opacity-50"
-                            title="Ubah Status ke Belum Aktif (Nonaktifkan)"
-                          >
-                            {deactivatingKey === entry.key ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                            ) : (
-                              <PowerOff className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {canCreateInput && (
+                            <Link
+                              href={`/daily-input?clusterId=${entry.dbClusterId}`}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-[11px] transition"
+                            >
+                              + Input
+                            </Link>
+                          )}
+                          {canViewMatrix && (
+                            <Link
+                              href={`/matrix?clusterId=${entry.dbClusterId}`}
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition"
+                            >
+                              Matriks
+                            </Link>
+                          )}
+                          {canManage && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditClusterModal(entry)}
+                                className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-slate-100 transition"
+                                title="Edit Identitas & Status Cluster"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeactivateEntry(entry)}
+                                disabled={deactivatingKey === entry.key}
+                                className="p-1.5 text-slate-400 hover:text-amber-700 rounded-lg hover:bg-amber-50 transition disabled:opacity-50"
+                                title="Ubah Status ke Belum Aktif (Nonaktifkan)"
+                              >
+                                {deactivatingKey === entry.key ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                                ) : (
+                                  <PowerOff className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </>
+                          )}
                         </div>
-                      ) : (
+                      ) : canManage ? (
                         <button
                           type="button"
                           onClick={() => handleActivateEntry(entry)}
@@ -945,6 +961,8 @@ export default function SitelistClient({
                           )}
                           <span>Aktifkan Cluster</span>
                         </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">Hanya Lihat</span>
                       )}
                     </td>
                   </tr>

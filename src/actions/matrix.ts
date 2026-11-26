@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import * as excel from 'xlsx';
 import { cleanupLegacyRawBoqItems } from '@/actions/importBoq';
 import { sortWorkItems } from '@/lib/progressCalculator';
+import { getCurrentUser } from '@/lib/auth';
+import { canAccessCity } from '@/lib/permissions';
 import {
   backupDatabaseToNextcloud,
   ensureDatabaseRestoredFromNextcloud,
@@ -14,13 +16,22 @@ import {
 
 export async function getMatrixData(filterClusterId?: string) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.matrixView) {
+      return {
+        dates: [],
+        matrixRows: [],
+        clustersList: [],
+      };
+    }
+
     await ensureDatabaseRestoredFromNextcloud();
     await normalizeDatabaseReportDates();
     await cleanupLegacyRawBoqItems();
 
     const whereClause = filterClusterId && filterClusterId !== 'ALL' ? { id: filterClusterId } : {};
 
-    const clusters = await prisma.cluster.findMany({
+    const rawClusters = await prisma.cluster.findMany({
       where: whereClause,
       include: {
         workItems: {
@@ -37,9 +48,16 @@ export async function getMatrixData(filterClusterId?: string) {
       orderBy: { name: 'asc' },
     });
 
-  const reportSummaries = await prisma.dailyReport.findMany({
-    select: { clusterId: true, reportDate: true, teamName: true },
-  });
+    const clusters = rawClusters.filter((c) => canAccessCity(currentUser, c.kabupaten));
+    const allowedClusterIds = clusters.map((c) => c.id);
+
+  const reportSummaries =
+    allowedClusterIds.length === 0
+      ? []
+      : await prisma.dailyReport.findMany({
+          where: { clusterId: { in: allowedClusterIds } },
+          select: { clusterId: true, reportDate: true, teamName: true },
+        });
 
   const dates = Array.from(
     new Set(reportSummaries.map((report) => formatCanonicalReportDate(report.reportDate)))
@@ -132,10 +150,13 @@ export async function getMatrixData(filterClusterId?: string) {
     }
   }
 
-  const allClustersList = await prisma.cluster.findMany({
-    select: { id: true, name: true },
+  const allClustersRaw = await prisma.cluster.findMany({
+    select: { id: true, name: true, kabupaten: true },
     orderBy: { name: 'asc' },
   });
+  const allClustersList = allClustersRaw
+    .filter((c) => canAccessCity(currentUser, c.kabupaten))
+    .map(({ id, name }) => ({ id, name }));
 
     return {
       dates,
@@ -153,6 +174,15 @@ export async function getMatrixData(filterClusterId?: string) {
 }
 
 export async function exportMatrixToExcel(filterClusterId?: string) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser || !currentUser.permissions.matrixExport) {
+    return {
+      filename: '',
+      base64: '',
+      error: 'Akses ditolak: Anda tidak memiliki izin ekspor Excel.',
+    };
+  }
+
   const { dates, matrixRows } = await getMatrixData(filterClusterId);
 
   const headerRow1 = ['Cluster', 'HP', 'Scope', 'Tipe', 'Item Pekerjaan', 'Satuan', ...dates, 'TOTAL', 'BOQ', 'SISA', 'PROGRESS %', 'STATUS'];
@@ -206,6 +236,22 @@ export async function exportMatrixToExcel(filterClusterId?: string) {
 
 export async function updateWorkItemStatus(workItemId: string, status: string) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.matrixEditStatus) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin mengubah status final.' };
+    }
+
+    const existingItem = await prisma.workItem.findUnique({
+      where: { id: workItemId },
+      include: { cluster: { select: { kabupaten: true } } },
+    });
+    if (!existingItem) {
+      return { success: false, error: 'Item pekerjaan tidak ditemukan.' };
+    }
+    if (!canAccessCity(currentUser, existingItem.cluster.kabupaten)) {
+      return { success: false, error: 'Akses ditolak untuk wilayah Kota cluster ini.' };
+    }
+
     const updated = await prisma.workItem.update({
       where: { id: workItemId },
       data: { status },

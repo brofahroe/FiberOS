@@ -11,10 +11,23 @@ import {
   parseReportDateMs,
 } from '@/lib/dbSync';
 import { calculateClusterProgress, sortWorkItems } from '@/lib/progressCalculator';
+import { getCurrentUser } from '@/lib/auth';
+import { canAccessCity } from '@/lib/permissions';
 import sitelistData from '@/data/sitelist.json';
 
 export async function getDashboardData() {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.dashboardView) {
+      return {
+        project: null,
+        categories: [],
+        clusters: [],
+        recentReports: [],
+        dailyTrends: [],
+      };
+    }
+
     await ensureDatabaseRestoredFromNextcloud();
     await normalizeDatabaseReportDates();
     await cleanupLegacyRawBoqItems();
@@ -109,8 +122,12 @@ export async function getDashboardData() {
   }
 
   const clustersWithProgress: ClusterWithProgress[] = [];
+  const visibleClusters = project.clusters.filter((c) =>
+    canAccessCity(currentUser, c.kabupaten)
+  );
+  const visibleClusterIds = visibleClusters.map((c) => c.id);
 
-  for (const cluster of project.clusters) {
+  for (const cluster of visibleClusters) {
     totalHomePasses += cluster.homePasses;
     let clusterBoq = 0;
     let clusterInstalled = 0;
@@ -255,7 +272,7 @@ export async function getDashboardData() {
     id: project.id,
     name: project.name,
     code: project.code,
-    totalClusters: project.clusters.length,
+    totalClusters: visibleClusters.length,
     totalHomePasses: totalHomePasses,
     overallProgress: overallProgress,
     totalBoq: Math.round(totalBoq),
@@ -263,19 +280,25 @@ export async function getDashboardData() {
   };
 
   // Calculate daily installation trends (poles and cables per date)
-  const allDailyReports = await prisma.dailyReport.findMany({
-    include: {
-      cluster: {
-        select: { id: true, name: true },
-      },
-      items: {
-        include: {
-          workItem: true,
-        },
-      },
-    },
-    orderBy: { reportDate: 'asc' },
-  });
+  const allDailyReports =
+    visibleClusterIds.length === 0
+      ? []
+      : await prisma.dailyReport.findMany({
+          where: {
+            clusterId: { in: visibleClusterIds },
+          },
+          include: {
+            cluster: {
+              select: { id: true, name: true },
+            },
+            items: {
+              include: {
+                workItem: true,
+              },
+            },
+          },
+          orderBy: { reportDate: 'asc' },
+        });
 
   const parseReportDate = (d: string) => parseReportDateMs(d);
 

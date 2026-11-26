@@ -95,8 +95,14 @@ const SUBFEEDER_ONLY_SET = new Set(['kabel 96c', 'kabel 144c', 'kabel 288c']);
 
 export default function ClustersBoqClient({
   initialClusters,
+  canEdit = true,
+  canCreateInput = true,
+  canViewMatrix = true,
 }: {
   initialClusters: ClusterBoqView[];
+  canEdit?: boolean;
+  canCreateInput?: boolean;
+  canViewMatrix?: boolean;
 }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -424,28 +430,34 @@ export default function ClustersBoqClient({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openAddModal(cluster)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold rounded-lg text-xs transition"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Tambah Item BOQ
-                      </button>
-                      <Link
-                        href={`/daily-input?clusterId=${cluster.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold rounded-lg text-xs transition"
-                      >
-                        <PlusCircle className="w-3.5 h-3.5" />
-                        Input Harian
-                      </Link>
-                      <Link
-                        href={`/matrix?clusterId=${cluster.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold rounded-lg text-xs transition"
-                      >
-                        <FileSpreadsheet className="w-3.5 h-3.5" />
-                        Matriks
-                      </Link>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => openAddModal(cluster)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold rounded-lg text-xs transition"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Tambah Item BOQ
+                        </button>
+                      )}
+                      {canCreateInput && (
+                        <Link
+                          href={`/daily-input?clusterId=${cluster.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold rounded-lg text-xs transition"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          Input Harian
+                        </Link>
+                      )}
+                      {canViewMatrix && (
+                        <Link
+                          href={`/matrix?clusterId=${cluster.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold rounded-lg text-xs transition"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                          Matriks
+                        </Link>
+                      )}
                     </div>
                   </div>
 
@@ -462,13 +474,13 @@ export default function ClustersBoqClient({
                           <th className="p-3 w-28 text-right">Sisa</th>
                           <th className="p-3 w-24 text-center">Prog %</th>
                           <th className="p-3 w-28 text-center">Status Final</th>
-                          <th className="p-3 w-24 text-right">Aksi</th>
+                          {canEdit && <th className="p-3 w-24 text-right">Aksi</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-slate-700">
                         {cluster.items.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="p-6 text-center text-slate-400">
+                            <td colSpan={canEdit ? 10 : 9} className="p-6 text-center text-slate-400">
                               Belum ada item BOQ terdaftar. Klik &quot;+ Tambah Item BOQ&quot; di kanan atas kartu ini.
                             </td>
                           </tr>
@@ -538,31 +550,33 @@ export default function ClustersBoqClient({
                                     : '⚡ ONGOING'}
                                 </span>
                               </td>
-                              <td className="p-3 text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditModal(cluster, it)}
-                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                    title="Edit Jenis Item / Target BOQ"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteItem(cluster, it)}
-                                    disabled={deletingId === it.id}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
-                                    title="Hapus Item BOQ"
-                                  >
-                                    {deletingId === it.id ? (
-                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
-                                    ) : (
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    )}
-                                  </button>
-                                </div>
-                              </td>
+                              {canEdit && (
+                                <td className="p-3 text-right whitespace-nowrap">
+                                  <div className="inline-flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditModal(cluster, it)}
+                                      className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                      title="Edit Jenis Item / Target BOQ"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteItem(cluster, it)}
+                                      disabled={deletingId === it.id}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                                      title="Hapus Item BOQ"
+                                    >
+                                      {deletingId === it.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-600" />
+                                      ) : (
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           ))
                         )}

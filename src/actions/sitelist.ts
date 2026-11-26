@@ -16,6 +16,8 @@ import {
   formatCanonicalReportDate,
   parseReportDateMs,
 } from '@/lib/dbSync';
+import { getCurrentUser } from '@/lib/auth';
+import { canAccessCity } from '@/lib/permissions';
 
 export interface SitelistEntry {
   key: string;
@@ -74,6 +76,21 @@ const DEFAULT_WORK_ITEMS = DEFAULT_BOQ_WORK_ITEMS;
 
 export async function getSitelistData() {
   try {
+    const currentUser = await getCurrentUser();
+    if (
+      !currentUser ||
+      (!currentUser.permissions.sitelistView && !currentUser.permissions.sitelistManage)
+    ) {
+      return {
+        entries: [],
+        kecamatanSummaries: [],
+        kabupatenSummaries: [],
+        kecamatanList: [],
+        kabupatenList: [],
+        oltList: [],
+      };
+    }
+
     await ensureDatabaseRestoredFromNextcloud();
     await cleanupLegacyRawBoqItems();
 
@@ -306,12 +323,15 @@ export async function getSitelistData() {
       });
     }
 
+    // Filter entries by user's allowed Kota scope
+    const scopedEntries = entries.filter((e) => canAccessCity(currentUser, e.kabupaten));
+
     // 3. Build Summaries per Kecamatan and per Kabupaten
     const buildSummaryGroup = (
       groupType: 'KECAMATAN' | 'KABUPATEN'
     ): RegionSummaryItem[] => {
       const map = new Map<string, SitelistEntry[]>();
-      for (const e of entries) {
+      for (const e of scopedEntries) {
         const key = groupType === 'KECAMATAN' ? e.kecamatan : e.kabupaten;
         const list = map.get(key) || [];
         list.push(e);
@@ -371,12 +391,12 @@ export async function getSitelistData() {
     const kabupatenSummaries = buildSummaryGroup('KABUPATEN');
 
     return {
-      entries,
+      entries: scopedEntries,
       kecamatanSummaries,
       kabupatenSummaries,
-      kecamatanList: Array.from(new Set(entries.map((e) => e.kecamatan))).sort(),
-      kabupatenList: Array.from(new Set(entries.map((e) => e.kabupaten))).sort(),
-      oltList: Array.from(new Set(entries.map((e) => e.oltName))).sort(),
+      kecamatanList: Array.from(new Set(scopedEntries.map((e) => e.kecamatan))).sort(),
+      kabupatenList: Array.from(new Set(scopedEntries.map((e) => e.kabupaten))).sort(),
+      oltList: Array.from(new Set(scopedEntries.map((e) => e.oltName))).sort(),
     };
   } catch (error) {
     console.error('Error in getSitelistData:', error);
@@ -407,9 +427,20 @@ export async function createOrActivateSitelistCluster(input: {
   isActive?: boolean;
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.sitelistManage) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin mengelola Sitelist.' };
+    }
+
     const shortName = input.shortName.trim().toUpperCase();
     if (!shortName) {
       return { success: false, error: 'Short Name / Nama Cluster wajib diisi.' };
+    }
+    if (!canAccessCity(currentUser, input.kabupaten)) {
+      return {
+        success: false,
+        error: `Akses ditolak: Anda tidak memiliki akses untuk Kota "${input.kabupaten || 'Blora'}".`,
+      };
     }
 
     let project = await prisma.project.findFirst();
@@ -567,6 +598,11 @@ export async function deactivateSitelistCluster(input: {
   shortName: string;
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.sitelistManage) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menonaktifkan Sitelist.' };
+    }
+
     const shortName = input.shortName.trim().toUpperCase();
     const target = input.dbClusterId
       ? await prisma.cluster.findUnique({ where: { id: input.dbClusterId } })
@@ -577,6 +613,9 @@ export async function deactivateSitelistCluster(input: {
         success: false,
         error: `Cluster "${shortName}" sudah berstatus Belum Aktif.`,
       };
+    }
+    if (!canAccessCity(currentUser, target.kabupaten)) {
+      return { success: false, error: 'Akses wilayah Kota ditolak.' };
     }
 
     await prisma.cluster.delete({
@@ -604,6 +643,11 @@ export async function deactivateSitelistCluster(input: {
 
 export async function activateAllSitelistClusters(kecamatanFilter?: string) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.sitelistManage) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin mengaktifkan Sitelist.' };
+    }
+
     let project = await prisma.project.findFirst();
     if (!project) {
       project = await prisma.project.create({
@@ -631,6 +675,9 @@ export async function activateAllSitelistClusters(kecamatanFilter?: string) {
     let addedCount = 0;
 
     for (const site of sitelistData.sites) {
+      if (!canAccessCity(currentUser, site.kabupaten)) {
+        continue;
+      }
       if (
         kecamatanFilter &&
         kecamatanFilter !== 'ALL' &&
@@ -775,6 +822,11 @@ export async function parseSitelistFile(
   error?: string;
 }> {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.sitelistManage) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin mengimpor Sitelist.' };
+    }
+
     if (!fileBase64) {
       return { success: false, error: 'File kosong atau gagal dibaca.' };
     }
@@ -945,8 +997,24 @@ export async function commitSitelistImport(input: {
   defaultKota?: string;
 }) {
   try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser || !currentUser.permissions.sitelistManage) {
+      return { success: false, error: 'Akses ditolak: Anda tidak memiliki izin menyimpan Impor Sitelist.' };
+    }
+
     if (!input.rows || input.rows.length === 0) {
       return { success: false, error: 'Tidak ada data sitelist untuk diimpor.' };
+    }
+
+    const fallbackKotaCheck = input.defaultKota?.trim() || 'Blora';
+    for (const r of input.rows) {
+      const targetKota = r.kota.trim() || fallbackKotaCheck;
+      if (!canAccessCity(currentUser, targetKota)) {
+        return {
+          success: false,
+          error: `Akses ditolak: Anda tidak memiliki izin wilayah untuk Kota "${targetKota}".`,
+        };
+      }
     }
 
     await ensureDatabaseRestoredFromNextcloud();

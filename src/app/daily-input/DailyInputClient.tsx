@@ -30,6 +30,7 @@ import WhatsAppReportModal from '@/components/WhatsAppReportModal';
 import { SearchableDropdown } from '@/components/SearchableDropdown/SearchableDropdown';
 import { TeamSelectorDropdown, type PreviousTeamOption } from '@/components/TeamSelectorDropdown';
 import type { TimPelaksanaOption } from '@/lib/timPelaksana';
+import { canAccessCity, type UserRole } from '@/lib/permissions';
 import sitelistData from '@/data/sitelist.json';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -116,6 +117,10 @@ export default function DailyInputClient({
   clusters,
   masterTeams = [],
   loggedInUserName = '',
+  currentUserRole = 'USER',
+  allowedCities = ['ALL'],
+  canCreate = true,
+  canExportWa = true,
   initialClusterId,
   initialDate,
   initialTeam,
@@ -123,6 +128,10 @@ export default function DailyInputClient({
   clusters: ClusterOption[];
   masterTeams?: TimPelaksanaOption[];
   loggedInUserName?: string;
+  currentUserRole?: UserRole;
+  allowedCities?: string[];
+  canCreate?: boolean;
+  canExportWa?: boolean;
   initialClusterId?: string;
   initialDate?: string;
   initialTeam?: string;
@@ -222,9 +231,11 @@ export default function DailyInputClient({
     setShowDatePicker(false);
   };
 
-  // Sitelist dropdown state (merge official sitelist with any custom DB clusters)
+  // Sitelist dropdown state (merge official sitelist filtered by user's Kota with DB clusters)
   const sitelistOptions: SiteOption[] = useMemo(() => {
-    const baseSites: SiteOption[] = [...sitelistData.sites];
+    const baseSites: SiteOption[] = sitelistData.sites.filter((s) =>
+      canAccessCity({ role: currentUserRole, allowedCities }, s.kabupaten)
+    );
     for (const c of clusters) {
       const lower = c.name.trim().toLowerCase();
       const stripped = lower.replace(/^kel(urahan)?\.?\s+/i, '').replace(/\s+blora$/i, '').trim();
@@ -242,12 +253,12 @@ export default function DailyInputClient({
           clusterId: c.id,
           clusterName: c.name.toUpperCase(),
           shortName: c.name.toUpperCase(),
-          oltName: 'OLT Blora',
+          oltName: 'OLT',
         });
       }
     }
     return baseSites;
-  }, [clusters]);
+  }, [clusters, currentUserRole, allowedCities]);
 
   const [selectedSitelistOption, setSelectedSitelistOption] = useState<SiteOption | null>(null);
 
@@ -336,6 +347,7 @@ export default function DailyInputClient({
 
   // Edit / correction mode state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [canEditLoadedReport, setCanEditLoadedReport] = useState<boolean>(true);
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [showInlineRename, setShowInlineRename] = useState<boolean>(false);
   const [renameTeamInput, setRenameTeamInput] = useState<string>('');
@@ -446,6 +458,7 @@ export default function DailyInputClient({
       setReportLookupError(null);
       setMessage(null);
       setIsEditMode(false);
+      setCanEditLoadedReport(true);
       setEditingReportId(null);
       setShowInlineRename(false);
       setItems((prev) => prev.map((it) => ({ ...it, todayQty: '' })));
@@ -478,6 +491,7 @@ export default function DailyInputClient({
 
       if (res && res.exists && res.report) {
         setIsEditMode(true);
+        setCanEditLoadedReport(res.canEdit !== false);
         setEditingReportId(res.report.id);
         setRenameTeamInput(res.report.teamName);
         setTeamName(res.report.teamName);
@@ -687,15 +701,28 @@ export default function DailyInputClient({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowWaModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition transform active:scale-95 self-start sm:self-auto"
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>📲 Format Laporan WA</span>
-        </button>
+        {canExportWa && (
+          <button
+            type="button"
+            onClick={() => setShowWaModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition transform active:scale-95 self-start sm:self-auto"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>📲 Format Laporan WA</span>
+          </button>
+        )}
       </div>
+
+      {((isEditMode && !canEditLoadedReport) || (!isEditMode && !canCreate)) && !checkingReport && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-3 text-xs sm:text-sm font-medium">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+          <span>
+            {isEditMode
+              ? 'Mode Hanya Lihat: Laporan ini milik pengawas lain atau Anda tidak memiliki izin mengedit riwayat laporan.'
+              : 'Mode Hanya Lihat: Anda tidak memiliki izin untuk menambahkan laporan input harian baru.'}
+          </span>
+        </div>
+      )}
 
       {message && (
         <div
@@ -714,7 +741,7 @@ export default function DailyInputClient({
             <span>{message.text}</span>
           </div>
 
-          {message.type === 'success' && (
+          {message.type === 'success' && canExportWa && (
             <button
               type="button"
               onClick={() => setShowWaModal(true)}
@@ -1018,35 +1045,37 @@ export default function DailyInputClient({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {editingReportId && (
+              {canEditLoadedReport && (
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  {editingReportId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRenameTeamInput(teamName);
+                        setShowInlineRename((prev) => !prev);
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Ubah Nama Tim</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => {
-                      setRenameTeamInput(teamName);
-                      setShowInlineRename((prev) => !prev);
-                    }}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                    onClick={handleDeleteReport}
+                    disabled={deletingReport}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
                   >
-                    <Pencil className="w-3.5 h-3.5" />
-                    <span>Ubah Nama Tim</span>
+                    {deletingReport ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Hapus Laporan Ini</span>
                   </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDeleteReport}
-                  disabled={deletingReport}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
-                >
-                  {deletingReport ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-3.5 h-3.5" />
-                  )}
-                  <span>Hapus Laporan Ini</span>
-                </button>
-              </div>
+                </div>
+              )}
             </div>
 
             {showInlineRename && editingReportId && (
@@ -1264,7 +1293,10 @@ export default function DailyInputClient({
                                 type="number"
                                 step="any"
                                 min="0"
-                                disabled={item.status === 'DONE'}
+                                disabled={
+                                  item.status === 'DONE' ||
+                                  (isEditMode ? !canEditLoadedReport : !canCreate)
+                                }
                                 value={item.todayQty}
                                 onChange={(e) => handleQtyChange(item.id, e.target.value)}
                                 placeholder={item.status === 'DONE' ? 'Locked' : '0'}
@@ -1313,9 +1345,10 @@ export default function DailyInputClient({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            disabled={isEditMode ? !canEditLoadedReport : !canCreate}
             rows={2}
             placeholder="Contoh: Penarikan kabel RT 02 terhambat izin pemangkasan pohon; tiang 3 batang ditunda menunggu izin PLN."
-            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -1325,19 +1358,21 @@ export default function DailyInputClient({
           </label>
 
           <div className="flex flex-wrap items-center gap-3">
-            <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/50 rounded-xl text-xs font-semibold text-slate-700 transition">
-              <Camera className="w-4 h-4 text-blue-600" />
-              <span>Ambil Foto / Pilih Gambar</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                capture="environment"
-                onChange={handlePhotoUpload}
-                className="hidden"
-                disabled={compressing}
-              />
-            </label>
+            {!(isEditMode ? !canEditLoadedReport : !canCreate) && (
+              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/50 rounded-xl text-xs font-semibold text-slate-700 transition">
+                <Camera className="w-4 h-4 text-blue-600" />
+                <span>Ambil Foto / Pilih Gambar</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  capture="environment"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  disabled={compressing}
+                />
+              </label>
+            )}
 
             {compressing && (
               <div className="flex items-center gap-2 text-xs text-blue-600 font-medium">
@@ -1353,13 +1388,15 @@ export default function DailyInputClient({
               {photos.map((photoUrl, idx) => (
                 <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-square bg-slate-100">
                   <img src={photoUrl} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(idx)}
-                    className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-full transition"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  {!(isEditMode ? !canEditLoadedReport : !canCreate) && (
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(idx)}
+                      className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-full transition"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1379,7 +1416,13 @@ export default function DailyInputClient({
 
         <button
           type="submit"
-          disabled={submitting || compressing || checkingReport || Boolean(reportLookupError)}
+          disabled={
+            submitting ||
+            compressing ||
+            checkingReport ||
+            Boolean(reportLookupError) ||
+            (isEditMode ? !canEditLoadedReport : !canCreate)
+          }
           className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition transform active:scale-95 disabled:opacity-50"
         >
           {submitting ? (
