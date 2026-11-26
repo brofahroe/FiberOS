@@ -30,7 +30,8 @@ type ClusterSortKey =
   | 'sfPole'
   | 'sfCable'
   | 'fat'
-  | 'fdt';
+  | 'fdt'
+  | 'jc';
 
 type MfSortKey = 'name' | 'team' | 'percentage' | 'pole' | 'cable' | 'jc';
 
@@ -95,7 +96,11 @@ function summarizeScopePoleCable(cluster: ClusterWithProgress) {
 
       const cat = (it.category || '').toUpperCase();
       const sub = (it.subCategory || '').toUpperCase();
-      const matchesCategory = cat === targetCategory || sub === targetCategory;
+      const name = (it.itemName || '').toLowerCase();
+      const matchesCategory =
+        cat === targetCategory ||
+        sub === targetCategory ||
+        (targetCategory === 'JC' && (name.includes('joint closure') || name.includes('closure')));
       if (!matchesCategory) continue;
 
       boq += it.boq;
@@ -114,6 +119,7 @@ function summarizeScopePoleCable(cluster: ClusterWithProgress) {
     sfCable: sumBy('SUBFEEDER', 'CABLE'),
     fat: sumBy('ALL', 'FAT'),
     fdt: sumBy('ALL', 'FDT'),
+    jc: sumBy('ALL', 'JC'),
     mfPole: sumBy('MAIN_FEEDER', 'POLE'),
     mfCable: sumBy('MAIN_FEEDER', 'CABLE'),
     mfJc: sumBy('MAIN_FEEDER', 'JC'),
@@ -286,6 +292,9 @@ export default function DashboardSummaryClient({
         case 'fdt':
           cmp = ratio(a.summary.fdt) - ratio(b.summary.fdt) || a.summary.fdt.installed - b.summary.fdt.installed;
           break;
+        case 'jc':
+          cmp = ratio(a.summary.jc) - ratio(b.summary.jc) || a.summary.jc.installed - b.summary.jc.installed;
+          break;
       }
       return clusterSort.dir === 'asc' ? cmp : -cmp;
     });
@@ -347,6 +356,8 @@ export default function DashboardSummaryClient({
       fatBoq: 0,
       fdtInst: 0,
       fdtBoq: 0,
+      jcInst: 0,
+      jcBoq: 0,
     };
     for (const { cluster, summary } of clusterOnlyRows) {
       totals.hp += cluster.homePasses || 0;
@@ -362,6 +373,8 @@ export default function DashboardSummaryClient({
       totals.fatBoq += summary.fat.boq;
       totals.fdtInst += summary.fdt.installed;
       totals.fdtBoq += summary.fdt.boq;
+      totals.jcInst += summary.jc.installed;
+      totals.jcBoq += summary.jc.boq;
     }
     return totals;
   }, [clusterOnlyRows]);
@@ -602,7 +615,7 @@ export default function DashboardSummaryClient({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-3 pt-1.5 border-t border-slate-100">
+            <div className="grid grid-cols-3 gap-x-2 pt-1.5 border-t border-slate-100">
               <div className="flex items-center justify-between gap-1 pr-2 border-r border-slate-100 min-w-0">
                 <span className="truncate text-slate-500" title="Status Terminasi FAT">
                   FAT:
@@ -611,12 +624,20 @@ export default function DashboardSummaryClient({
                   {formatCardStat(summary.fat.installed)} / {formatCardStat(summary.fat.boq)}
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-1 min-w-0">
+              <div className="flex items-center justify-between gap-1 pr-2 border-r border-slate-100 min-w-0">
                 <span className="truncate text-slate-500" title="Status Terminasi FDT">
                   FDT:
                 </span>
                 <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
                   {formatCardStat(summary.fdt.installed)} / {formatCardStat(summary.fdt.boq)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-1 min-w-0">
+                <span className="truncate text-slate-500" title="Status Joint Closure (JC)">
+                  JC:
+                </span>
+                <span className="font-semibold text-slate-800 shrink-0 tabular-nums">
+                  {formatCardStat(summary.jc.installed)} / {formatCardStat(summary.jc.boq)}
                 </span>
               </div>
             </div>
@@ -1007,6 +1028,15 @@ export default function DashboardSummaryClient({
                                 onClick={() => toggleClusterSort('fdt')}
                               />
                             </th>
+                            <th className="px-2.5 py-3 text-right whitespace-nowrap">
+                              <SortHeaderButton
+                                label="JC"
+                                active={clusterSort.key === 'jc'}
+                                dir={clusterSort.dir}
+                                align="right"
+                                onClick={() => toggleClusterSort('jc')}
+                              />
+                            </th>
                             <th className="px-3 py-3 text-right whitespace-nowrap">Aksi</th>
                           </tr>
                         </thead>
@@ -1094,6 +1124,10 @@ export default function DashboardSummaryClient({
                                 <strong className="text-slate-900">{formatCardStat(summary.fdt.installed)}</strong>
                                 <span className="text-slate-400"> / {formatCardStat(summary.fdt.boq)}</span>
                               </td>
+                              <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                                <strong className="text-slate-900">{formatCardStat(summary.jc.installed)}</strong>
+                                <span className="text-slate-400"> / {formatCardStat(summary.jc.boq)}</span>
+                              </td>
                               <td className="px-3 py-2.5 text-right whitespace-nowrap">
                                 {canCreateInput ? (
                                   <Link
@@ -1153,6 +1187,12 @@ export default function DashboardSummaryClient({
                               {formatCardStat(Math.round(clusterTotals.fdtInst * 10) / 10)} /{' '}
                               <span className="text-slate-500 font-semibold">
                                 {formatCardStat(Math.round(clusterTotals.fdtBoq * 10) / 10)}
+                              </span>
+                            </td>
+                            <td className="px-2.5 py-2.5 text-right whitespace-nowrap tabular-nums">
+                              {formatCardStat(Math.round(clusterTotals.jcInst * 10) / 10)} /{' '}
+                              <span className="text-slate-500 font-semibold">
+                                {formatCardStat(Math.round(clusterTotals.jcBoq * 10) / 10)}
                               </span>
                             </td>
                             <td />
