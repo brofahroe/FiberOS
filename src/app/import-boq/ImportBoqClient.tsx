@@ -34,6 +34,9 @@ export default function ImportBoqClient() {
   const [committing, setCommitting] = useState<boolean>(false);
   const [result, setResult] = useState<ParsedBoqResult | null>(null);
   const [clusterName, setClusterName] = useState<string>('');
+  const [clusterIdCode, setClusterIdCode] = useState<string>('');
+  const [subfeederIdCode, setSubfeederIdCode] = useState<string>('');
+  const [oltName, setOltName] = useState<string>('');
   const [scope, setScope] = useState<BoqImportScope>('CLUSTER');
   const [homePasses, setHomePasses] = useState<string>('0');
   const [showAllRefItems, setShowAllRefItems] = useState<boolean>(false);
@@ -71,11 +74,17 @@ export default function ImportBoqClient() {
   const applyParsedResult = (data: ParsedBoqResult) => {
     setResult(data);
     setClusterName(data.clusterName);
-    setScope(data.scope || 'CLUSTER');
+    const nextScope = data.scope || 'CLUSTER';
+    setScope(nextScope);
+    setClusterIdCode(
+      nextScope === 'MAIN_FEEDER'
+        ? data.mainFeederId || data.clusterId || ''
+        : data.clusterId || ''
+    );
+    setSubfeederIdCode(data.subfeederId || '');
+    setOltName(data.oltName || '');
     setConfirmOverwrite(false);
-    if (data.homePasses && data.homePasses > 0) {
-      setHomePasses(String(data.homePasses));
-    }
+    setHomePasses(data.homePasses && data.homePasses > 0 ? String(data.homePasses) : '0');
   };
 
   const handleScopeChange = (newScope: BoqImportScope) => {
@@ -87,6 +96,16 @@ export default function ImportBoqClient() {
           : result.clusterSheet;
       if (targetSheet && targetSheet.clusterName) {
         setClusterName(targetSheet.clusterName);
+      }
+      if (targetSheet && targetSheet.oltName) {
+        setOltName(targetSheet.oltName);
+      }
+      if (newScope === 'MAIN_FEEDER' && result.mainFeederId && !clusterIdCode) {
+        setClusterIdCode(result.mainFeederId);
+      } else if (newScope === 'CLUSTER' && result.clusterId && !clusterIdCode) {
+        setClusterIdCode(result.clusterId);
+      } else if (newScope === 'SUBFEEDER' && result.subfeederId && !subfeederIdCode) {
+        setSubfeederIdCode(result.subfeederId);
       }
     }
   };
@@ -208,6 +227,10 @@ export default function ImportBoqClient() {
 
     const res = await commitBoqImport({
       clusterName: clusterName.trim(),
+      clusterId: clusterIdCode.trim() || undefined,
+      subfeederId: subfeederIdCode.trim() || undefined,
+      emrSiteCode: result?.emrSiteCode || undefined,
+      oltName: oltName.trim() || undefined,
       scope,
       homePasses: parseInt(homePasses) || 0,
       items: activeSheetData.items,
@@ -503,6 +526,44 @@ export default function ImportBoqClient() {
                 value={homePasses}
                 onChange={(e) => setHomePasses(e.target.value)}
                 placeholder="0"
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                {scope === 'SUBFEEDER'
+                  ? 'SF ID (otomatis dari nama file)'
+                  : scope === 'MAIN_FEEDER'
+                  ? 'MF ID (otomatis dari nama file)'
+                  : 'CLR ID (otomatis dari nama file)'}
+              </label>
+              <input
+                type="text"
+                value={scope === 'SUBFEEDER' ? subfeederIdCode : clusterIdCode}
+                onChange={(e) =>
+                  scope === 'SUBFEEDER'
+                    ? setSubfeederIdCode(e.target.value)
+                    : setClusterIdCode(e.target.value)
+                }
+                placeholder={
+                  scope === 'SUBFEEDER'
+                    ? 'Contoh: SFM07-99-015'
+                    : scope === 'MAIN_FEEDER'
+                    ? 'Contoh: MFM07-32'
+                    : 'Contoh: CLR29-99-957'
+                }
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                OLT Name (otomatis dari kolom OLT file BOQ)
+              </label>
+              <input
+                type="text"
+                value={oltName}
+                onChange={(e) => setOltName(e.target.value)}
+                placeholder="Contoh: OLT Balun"
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

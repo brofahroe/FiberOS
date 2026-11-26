@@ -32,6 +32,7 @@ export interface ParsedBoqItem {
 export interface ParsedSheetScopeData {
   sheetName: string;
   clusterName: string;
+  oltName: string;
   homePasses: number;
   totalItems: number;
   hasActiveVolume: boolean;
@@ -43,6 +44,11 @@ export type BoqImportScope = 'CLUSTER' | 'SUBFEEDER' | 'MAIN_FEEDER';
 
 export interface ParsedBoqResult {
   clusterName: string;
+  clusterId?: string;
+  subfeederId?: string;
+  mainFeederId?: string;
+  emrSiteCode?: string;
+  oltName?: string;
   scope: BoqImportScope;
   homePasses?: number;
   projectCode?: string;
@@ -151,6 +157,40 @@ function cleanClusterName(rawName: string): string {
   return name;
 }
 
+function extractIdsFromFilename(filename?: string): {
+  clusterId?: string;
+  subfeederId?: string;
+  mainFeederId?: string;
+  emrSiteCode?: string;
+} {
+  if (!filename) return {};
+  const baseName = path.basename(filename).replace(/\.[^.]+$/, '').trim();
+
+  // Match CLR ID: e.g. CLR29-99-957, CLRM07-99-015, CLR-07-99-015
+  const clrMatch = baseName.match(/(?:^|[^A-Z0-9])(CLR[A-Z0-9]*(?:-\d[A-Z0-9]*)+)(?=$|[^A-Z0-9])/i);
+  // Match SF ID: e.g. SF29-99-957, SFM07-99-015, SF-07-99-015 (avoids "SF-KELURAHAN")
+  const sfMatch = baseName.match(/(?:^|[^A-Z0-9])(SF[A-Z0-9]*(?:-\d[A-Z0-9]*)+)(?=$|[^A-Z0-9])/i);
+  // Match MF ID: e.g. MFM07-32, MF29-99-001
+  const mfMatch = baseName.match(/(?:^|[^A-Z0-9])(MF[A-Z0-9]*(?:-\d[A-Z0-9]*)+)(?=$|[^A-Z0-9])/i);
+  // Match EMR Site Code: e.g. BLA000190
+  const emrMatch = baseName.match(/(?:^|[^A-Z0-9])([A-Z]{2,4}\d{5,})(?=$|[^A-Z0-9])/i);
+
+  return {
+    clusterId: clrMatch ? clrMatch[1].toUpperCase() : undefined,
+    subfeederId: sfMatch ? sfMatch[1].toUpperCase() : undefined,
+    mainFeederId: mfMatch ? mfMatch[1].toUpperCase() : undefined,
+    emrSiteCode: emrMatch ? emrMatch[1].toUpperCase() : undefined,
+  };
+}
+
+function getNextNonEmptyCell(row: unknown[], colIdx: number): string {
+  for (let offset = 1; offset <= 3; offset++) {
+    const candidate = String(row[colIdx + offset] ?? '').trim();
+    if (candidate && candidate !== ':') return candidate;
+  }
+  return '';
+}
+
 function parseSingleSheet(
   workbook: excel.WorkBook,
   sheetName: string,
@@ -162,21 +202,40 @@ function parseSingleSheet(
   const rows = sheet ? (excel.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][]) : [];
 
   let clusterName = '';
+  let detectedOltName = '';
   let detectedHp = 0;
 
-  for (let r = 0; r < Math.min(10, rows.length); r++) {
+  for (let r = 0; r < Math.min(12, rows.length); r++) {
     const row = rows[r];
     if (!row) continue;
     for (let c = 0; c < row.length; c++) {
       const val = String(row[c] || '').trim();
+      if (!val) continue;
       const lowerVal = val.toLowerCase();
-      if (lowerVal === 'cluster' || lowerVal === 'main/hub/sub feeder') {
-        const nextVal = String(row[c + 1] || '').trim();
+      const normLabel = lowerVal.replace(/:+$/, '').trim();
+
+      if (normLabel === 'cluster' || normLabel === 'main/hub/sub feeder') {
+        const nextVal = getNextNonEmptyCell(row, c);
         if (nextVal && nextVal.length > 2) {
           clusterName = nextVal;
         }
-      } else if (lowerVal === 'hp' || lowerVal === 'homepass' || lowerVal === 'home passes') {
-        const hpVal = parseInt(String(row[c + 1] || '0'), 10);
+      } else if (
+        normLabel === 'olt name' ||
+        normLabel === 'nama olt' ||
+        normLabel === 'olt' ||
+        normLabel === 'olt id'
+      ) {
+        const nextVal = getNextNonEmptyCell(row, c);
+        if (nextVal && nextVal !== '-' && nextVal.length >= 2) {
+          detectedOltName = nextVal;
+        }
+      } else if (!detectedOltName && /^(?:olt(?:\s+name)?|nama\s+olt)\s*[:=]\s*(.+)$/i.test(val)) {
+        const inlineOlt = val.replace(/^(?:olt(?:\s+name)?|nama\s+olt)\s*[:=]\s*/i, '').trim();
+        if (inlineOlt && inlineOlt !== '-' && inlineOlt.length >= 2) {
+          detectedOltName = inlineOlt;
+        }
+      } else if (normLabel === 'hp' || normLabel === 'homepass' || normLabel === 'home passes') {
+        const hpVal = parseInt(getNextNonEmptyCell(row, c) || '0', 10);
         if (!isNaN(hpVal) && hpVal > 0) {
           detectedHp = hpVal;
         }
@@ -185,9 +244,20 @@ function parseSingleSheet(
   }
 
   if (!clusterName && originalFilename) {
-    const match = originalFilename.match(/(?:KELURAHAN\s+)?([A-Za-z0-9_\-\s]+?)(?:_BOQ|\.xlsx)/i);
-    if (match && match[1]) {
-      clusterName = match[1].trim();
+    const baseNoExt = path.basename(originalFilename).replace(/\.[^.]+$/, '').trim();
+    const strippedId = baseNoExt
+      .replace(/^(?:APD[\s_-]+)?(?:(?:CLR|SF|MF)[A-Z0-9]*(?:-\d[A-Z0-9]*)+|[A-Z]{2,4}\d{5,})[\s_-]+/i, '')
+      .replace(/[\s_-]*BOQ.*$/i, '')
+      .replace(/^SF-/i, '')
+      .replace(/^KEL(URAHAN)?\.?\s+/i, '')
+      .trim();
+    if (strippedId) {
+      clusterName = strippedId;
+    } else {
+      const match = originalFilename.match(/(?:KELURAHAN\s+)?([A-Za-z0-9_\-\s]+?)(?:_BOQ|\.xlsx)/i);
+      if (match && match[1]) {
+        clusterName = match[1].trim();
+      }
     }
   }
 
@@ -258,6 +328,7 @@ function parseSingleSheet(
   return {
     sheetName,
     clusterName: cleanedName,
+    oltName: detectedOltName,
     homePasses: detectedHp,
     totalItems: parsedItems.length,
     hasActiveVolume: activeItems.length > 0,
@@ -272,6 +343,7 @@ async function parseWorkbook(
   preferredScope?: BoqImportScope
 ): Promise<ParsedBoqResult> {
   const rules = await getBoqReferenceRules();
+  const extractedIds = extractIdsFromFilename(originalFilename);
 
   // Find "BoQ NRO Cluster" sheet for CLUSTER
   const clusterSheetName =
@@ -306,12 +378,15 @@ async function parseWorkbook(
   const lowerFilename = (originalFilename || '').toLowerCase();
   const lowerSfName = (subfeederSheet.clusterName || '').toLowerCase();
   const filenameIndicatesSubfeeder =
-    lowerFilename.includes('subfeeder') || lowerFilename.includes('sf-');
+    lowerFilename.includes('subfeeder') ||
+    lowerFilename.includes('sf-') ||
+    Boolean(extractedIds.subfeederId);
   const indicatesMainFeeder =
     lowerFilename.includes('main feeder') ||
     lowerFilename.includes('mainfeeder') ||
     lowerFilename.includes('uplink') ||
     lowerFilename.includes('backbone') ||
+    Boolean(extractedIds.mainFeederId) ||
     lowerSfName.includes('main feeder') ||
     lowerSfName.includes('mainfeeder') ||
     lowerSfName.includes('uplink') ||
@@ -320,14 +395,14 @@ async function parseWorkbook(
   // Determine initial scope:
   // 1. If preferredScope is explicitly provided by user in UI, use it
   // 2. If filename/sheet name indicates Main Feeder / Uplink without Cluster BOQ, use MAIN_FEEDER (100% Feeder)
-  // 3. Otherwise if filename indicates subfeeder, use SUBFEEDER ("BoQ NRO All Feeder")
+  // 3. Otherwise if filename indicates subfeeder (and subfeeder sheet has volume or cluster sheet doesn't), use SUBFEEDER
   // 4. Otherwise if "BoQ NRO All Feeder" has active items (>0) and "BoQ NRO Cluster" has 0 active items, use SUBFEEDER
   let activeScope: BoqImportScope = 'CLUSTER';
   if (preferredScope) {
     activeScope = preferredScope;
   } else if (indicatesMainFeeder && !clusterSheet.hasActiveVolume) {
     activeScope = 'MAIN_FEEDER';
-  } else if (filenameIndicatesSubfeeder) {
+  } else if (filenameIndicatesSubfeeder && (subfeederSheet.hasActiveVolume || !clusterSheet.hasActiveVolume)) {
     activeScope = 'SUBFEEDER';
   } else if (subfeederSheet.hasActiveVolume && !clusterSheet.hasActiveVolume) {
     activeScope = 'SUBFEEDER';
@@ -336,8 +411,27 @@ async function parseWorkbook(
   const chosen =
     activeScope === 'SUBFEEDER' || activeScope === 'MAIN_FEEDER' ? subfeederSheet : clusterSheet;
 
+  const resolvedClusterName = chosen.clusterName || clusterSheet.clusterName;
+
+  // Fallback IDs & OLT from sitelist if filename didn't contain CLR/SF ID
+  const matchedSite = sitelistData.sites.find(
+    (s) =>
+      (extractedIds.clusterId && s.clusterId.toLowerCase() === extractedIds.clusterId.toLowerCase()) ||
+      (extractedIds.subfeederId && s.subfeederId.toLowerCase() === extractedIds.subfeederId.toLowerCase()) ||
+      (extractedIds.emrSiteCode && s.emrSiteCode.toLowerCase() === extractedIds.emrSiteCode.toLowerCase()) ||
+      s.shortName.toLowerCase() === resolvedClusterName.toLowerCase()
+  );
+
+  const detectedOltName =
+    chosen.oltName || clusterSheet.oltName || subfeederSheet.oltName || matchedSite?.oltName || '';
+
   return {
-    clusterName: chosen.clusterName || clusterSheet.clusterName,
+    clusterName: resolvedClusterName,
+    clusterId: extractedIds.clusterId || matchedSite?.clusterId,
+    subfeederId: extractedIds.subfeederId || matchedSite?.subfeederId,
+    mainFeederId: extractedIds.mainFeederId,
+    emrSiteCode: extractedIds.emrSiteCode || matchedSite?.emrSiteCode,
+    oltName: detectedOltName,
     scope: activeScope,
     homePasses: chosen.homePasses || clusterSheet.homePasses,
     sheetName: chosen.sheetName,
@@ -499,6 +593,10 @@ export async function checkBoqTargetCluster(
 
 export async function commitBoqImport(data: {
   clusterName: string;
+  clusterId?: string;
+  subfeederId?: string;
+  emrSiteCode?: string;
+  oltName?: string;
   scope?: BoqImportScope;
   homePasses?: number;
   items: ParsedBoqItem[];
@@ -532,18 +630,34 @@ export async function commitBoqImport(data: {
       ? data.clusterName.trim().toUpperCase()
       : cleanClusterName(data.clusterName);
 
+    const inputClusterId = (data.clusterId || '').trim().toUpperCase();
+    const inputSubfeederId = (data.subfeederId || '').trim().toUpperCase();
+    const inputEmrCode = (data.emrSiteCode || '').trim().toUpperCase();
+    const inputOltName = (data.oltName || '').trim();
+
     const matchedSite = isMainFeeder
       ? undefined
       : sitelistData.sites.find(
           (s) =>
+            (inputClusterId && s.clusterId.toLowerCase() === inputClusterId.toLowerCase()) ||
+            (inputSubfeederId && s.subfeederId.toLowerCase() === inputSubfeederId.toLowerCase()) ||
+            (inputEmrCode && s.emrSiteCode.toLowerCase() === inputEmrCode.toLowerCase()) ||
             s.shortName.toLowerCase() === cleanedName.toLowerCase() ||
             s.clusterName.toLowerCase() === data.clusterName.trim().toLowerCase()
         );
 
+    const lookupOr: Array<{ name?: string; code?: string; subfeederId?: string }> = [
+      { name: cleanedName },
+      { name: data.clusterName.trim() },
+      { name: data.clusterName.trim().toUpperCase() },
+    ];
+    if (inputClusterId) lookupOr.push({ code: inputClusterId });
+    if (scope === 'SUBFEEDER' && inputSubfeederId) lookupOr.push({ subfeederId: inputSubfeederId });
+
     let cluster = await prisma.cluster.findFirst({
       where: {
         projectId: project.id,
-        OR: [{ name: cleanedName }, { name: data.clusterName.trim() }, { name: data.clusterName.trim().toUpperCase() }],
+        OR: lookupOr,
       },
     });
 
@@ -562,20 +676,26 @@ export async function commitBoqImport(data: {
       };
     }
 
+    const resolvedCode = isMainFeeder
+      ? inputClusterId || `MF-${cleanedName.slice(0, 24)}`
+      : inputClusterId || matchedSite?.clusterId || `CLRM07-99-${cleanedName}`;
+    const resolvedSubfeederId = isMainFeeder
+      ? inputClusterId || cleanedName
+      : inputSubfeederId || matchedSite?.subfeederId || undefined;
+    const resolvedOltName = inputOltName || matchedSite?.oltName || 'OLT Kedungtuban';
+
     if (!cluster) {
       cluster = await prisma.cluster.create({
         data: {
           projectId: project.id,
           name: cleanedName,
-          code: isMainFeeder
-            ? `MF-${cleanedName.slice(0, 24)}`
-            : matchedSite?.clusterId || `CLRM07-99-${cleanedName}`,
-          emrSiteCode: matchedSite?.emrSiteCode || undefined,
-          subfeederId: isMainFeeder ? cleanedName : matchedSite?.subfeederId || undefined,
+          code: resolvedCode,
+          emrSiteCode: inputEmrCode || matchedSite?.emrSiteCode || undefined,
+          subfeederId: resolvedSubfeederId,
           clusterName: isMainFeeder
             ? cleanedName
-            : matchedSite?.clusterName || `KELURAHAN ${cleanedName} BLORA`,
-          oltName: matchedSite?.oltName || 'OLT Kedungtuban',
+            : matchedSite?.clusterName || cleanedName,
+          oltName: resolvedOltName,
           kecamatan: matchedSite?.kecamatan || 'Kedungtuban',
           kabupaten: matchedSite?.kabupaten || 'Blora',
           projectType: isMainFeeder ? 'MAIN_FEEDER' : 'CLUSTER_SF',
@@ -583,12 +703,35 @@ export async function commitBoqImport(data: {
         },
       });
     } else {
-      const updateData: { homePasses?: number; projectType?: string } = {};
+      const updateData: {
+        homePasses?: number;
+        projectType?: string;
+        code?: string;
+        subfeederId?: string;
+        oltName?: string;
+        emrSiteCode?: string;
+      } = {};
       if (data.homePasses && data.homePasses > 0) {
         updateData.homePasses = data.homePasses;
       }
       if (isMainFeeder && cluster.projectType !== 'MAIN_FEEDER') {
         updateData.projectType = 'MAIN_FEEDER';
+      }
+      if ((scope === 'CLUSTER' || isMainFeeder) && inputClusterId) {
+        updateData.code = inputClusterId;
+      }
+      if (scope === 'SUBFEEDER' && inputSubfeederId) {
+        updateData.subfeederId = inputSubfeederId;
+      } else if (isMainFeeder && inputClusterId) {
+        updateData.subfeederId = inputClusterId;
+      } else if (inputSubfeederId && !cluster.subfeederId) {
+        updateData.subfeederId = inputSubfeederId;
+      }
+      if (inputOltName) {
+        updateData.oltName = inputOltName;
+      }
+      if (inputEmrCode && !cluster.emrSiteCode) {
+        updateData.emrSiteCode = inputEmrCode;
       }
       if (Object.keys(updateData).length > 0) {
         await prisma.cluster.update({
